@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Harpenden Colts Cobras — Goal Tally</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    // Force the CLASSIC JSX runtime so Babel emits React.createElement(...)
+    // instead of injecting an ES `import` for the automatic runtime (which
+    // breaks when React is loaded as a global rather than a module).
+    Babel.registerPreset("react-classic", {
+      presets: [[Babel.availablePresets["react"], { runtime: "classic" }]]
+    });
+  </script>
+  <style> body { -webkit-tap-highlight-color: transparent; } </style>
+</head>
+<body class="bg-slate-50">
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react-classic">
+const { useState, useEffect, useRef } = React;
+
+/* =====================================================================
+   FIREBASE  ▸ paste your own config below (Console ▸ Project settings ▸
+   Your apps ▸ Web app ▸ "SDK setup and configuration" ▸ Config).
+   These values are meant to be public; access is controlled by rules.
+   ===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyDgkUjW3HQyq-tc-8TID9_8KMayRTXD9RM",
+  authDomain: "colts-cobras-stats.firebaseapp.com",
+  projectId: "colts-cobras-stats",
+  storageBucket: "colts-cobras-stats.firebasestorage.app",
+  messagingSenderId: "756444637974",
+  appId: "1:756444637974:web:91ea37a28f1757aaba3e37"
+};
+
+let docRef = null;
+try {
+  if (firebaseConfig.projectId && !String(firebaseConfig.apiKey).startsWith("PASTE")) {
+    firebase.initializeApp(firebaseConfig);
+    docRef = firebase.firestore().collection("season").doc("current");
+  }
+} catch (e) {
+  console.error("Firebase init failed:", e);
+}
+
+const normalize = (d) => ({
+  teamName: (d && d.teamName) || TEAM_NAME,
+  roster: Array.isArray(d && d.roster) ? d.roster : [],
+  matches: Array.isArray(d && d.matches) ? d.matches : [],
+  live: (d && d.live) || null
+});
+
+function Svg({ size = 20, strokeWidth = 2, className, children }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {children}
+    </svg>
+  );
+}
+const Plus = (p) => <Svg {...p}><line x1="5" y1="12" x2="19" y2="12" /><line x1="12" y1="5" x2="12" y2="19" /></Svg>;
+const Minus = (p) => <Svg {...p}><line x1="5" y1="12" x2="19" y2="12" /></Svg>;
+const Check = (p) => <Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>;
+const X = (p) => <Svg {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Svg>;
+const ChevronLeft = (p) => <Svg {...p}><path d="m15 18-6-6 6-6" /></Svg>;
+const Trash2 = (p) => <Svg {...p}><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></Svg>;
+const Pencil = (p) => <Svg {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></Svg>;
+const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></Svg>;
+const Users = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Svg>;
+const ArrowLeftRight = (p) => <Svg {...p}><path d="M8 3 4 7l4 4" /><path d="M4 7h16" /><path d="m16 21 4-4-4-4" /><path d="M20 17H4" /></Svg>;
+const Trophy = (p) => <Svg {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></Svg>;
+const CalendarDays = (p) => <Svg {...p}><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></Svg>;
+const Radio = (p) => <Svg {...p}><path d="M4.9 19.1a10 10 0 0 1 0-14.2" /><path d="M7.8 16.2a6 6 0 0 1 0-8.5" /><circle cx="12" cy="12" r="2" /><path d="M16.2 7.8a6 6 0 0 1 0 8.5" /><path d="M19.1 4.9a10 10 0 0 1 0 14.2" /></Svg>;
+
+
+const STORE_KEY = "goaltally:v2";
+const TEAM_NAME = "Harpenden Colts Cobras";
+const SQUAD = ["Theo", "Brodie", "Archie", "Oisin", "William", "Ishan", "Dougie", "Toby"];
+
+const uid = () =>
+  crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const today = () => new Date().toISOString().slice(0, 10);
+const seed = () => ({
+  teamName: TEAM_NAME,
+  roster: SQUAD.map((name) => ({ id: uid(), name, active: true })),
+  matches: [],
+  live: null,
+});
+
+function fmtDate(iso, long = false) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const day = dt.toLocaleDateString("en-GB", { weekday: "short" });
+  const mon = dt.toLocaleDateString("en-GB", { month: "short" });
+  return long ? `${day} ${d} ${mon} ${y}` : `${day} ${d} ${mon}`;
+}
+
+const sum = (obj) => Object.values(obj || {}).reduce((a, b) => a + (b || 0), 0);
+const ourScore = (m) => sum(m.goals);
+const stripZeros = (obj) =>
+  Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => v > 0));
+
+// home/away aware sides for display: l/r names, ls/rs scores
+function sides(teamName, opposition, us, them, home) {
+  const opp = opposition || "Opposition";
+  return home
+    ? { l: teamName, ls: us, r: opp, rs: them, home: true }
+    : { l: opp, ls: them, r: teamName, rs: us, home: false };
+}
+
+// ---------- small building blocks ----------
+
+function Stepper({ value, onDec, onInc, tone = "plain", disabled = false }) {
+  const dec =
+    "h-11 w-11 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 active:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none";
+  const incGoal =
+    "h-11 w-11 flex items-center justify-center rounded-xl bg-emerald-600 text-white active:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none";
+  const incPlain =
+    "h-11 w-11 flex items-center justify-center rounded-xl bg-slate-800 text-white active:bg-slate-900 disabled:opacity-40 disabled:pointer-events-none";
+  return (
+    <div className={"flex items-center gap-2" + (disabled ? " opacity-60" : "")}>
+      <button
+        onClick={onDec}
+        disabled={disabled || value <= 0}
+        className={dec}
+        aria-label="decrease"
+      >
+        <Minus size={18} strokeWidth={2.5} />
+      </button>
+      <span className="w-6 text-center text-lg font-semibold tabular-nums text-slate-900">
+        {value}
+      </span>
+      <button
+        onClick={onInc}
+        disabled={disabled}
+        className={tone === "goal" ? incGoal : incPlain}
+        aria-label="increase"
+      >
+        <Plus size={18} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  body,
+  confirmLabel,
+  danger,
+  onConfirm,
+  onCancel,
+  secondaryLabel,
+  onSecondary,
+  single,
+}) {
+  const confirmCls =
+    "w-full rounded-xl py-2.5 text-sm font-semibold text-white " +
+    (danger ? "bg-rose-600 active:bg-rose-700" : "bg-emerald-600 active:bg-emerald-700");
+  const neutral =
+    "flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50";
+  const secondary =
+    "flex-1 rounded-xl border border-rose-200 py-2.5 text-sm font-semibold text-rose-600 active:bg-rose-50";
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        {body && <p className="mt-1 text-sm text-slate-500">{body}</p>}
+        {single ? (
+          <div className="mt-5">
+            <button onClick={onConfirm} className={confirmCls}>
+              {confirmLabel}
+            </button>
+          </div>
+        ) : secondaryLabel ? (
+          <div className="mt-5 space-y-2">
+            <button onClick={onConfirm} className={confirmCls}>
+              {confirmLabel}
+            </button>
+            <div className="flex gap-2">
+              <button onClick={onSecondary} className={secondary}>
+                {secondaryLabel}
+              </button>
+              <button onClick={onCancel} className={neutral}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-5 flex gap-2">
+            <button onClick={onCancel} className={neutral}>
+              Cancel
+            </button>
+            <button onClick={onConfirm} className={confirmCls}>
+              {confirmLabel}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ResultBadge({ us, them, size = "sm" }) {
+  const r = us > them ? "W" : us < them ? "L" : "D";
+  const map = {
+    W: "bg-emerald-100 text-emerald-700",
+    D: "bg-slate-100 text-slate-600",
+    L: "bg-rose-100 text-rose-700",
+  };
+  const dim = size === "lg" ? "h-8 w-8 text-sm" : "h-6 w-6 text-xs";
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-lg font-bold ${dim} ${map[r]}`}
+    >
+      {r}
+    </span>
+  );
+}
+
+// ---------- main app ----------
+
+// ---------- App (Firestore-backed, shared in real time) ----------
+
+function App() {
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState("scorers");
+  const [toast, setToast] = useState("");
+  const [banner, setBanner] = useState(docRef ? "" : "offline");
+  const dirty = useRef(false);
+  const dataRef = useRef(null);
+  const writeTimer = useRef(null);
+
+  const writeNow = (next) => {
+    if (!docRef) return;
+    docRef.set(next)
+      .then(() => setBanner((b) => (b === "save-error" ? "" : b)))
+      .catch((err) => { console.error("Save failed:", err); setBanner("save-error"); })
+      .finally(() => { dirty.current = false; });
+  };
+
+  useEffect(() => {
+    if (!docRef) {
+      const s = seed();
+      dataRef.current = s;
+      setData(s);
+      return;
+    }
+    const unsub = docRef.onSnapshot(
+      (snap) => {
+        if (!snap.exists) {
+          const s = seed();
+          dataRef.current = s;
+          setData(s);
+          writeNow(s);
+          return;
+        }
+        if (snap.metadata.hasPendingWrites) return; // our own optimistic write echoing back
+        if (dirty.current) return;                  // don't clobber an in-progress edit
+        const incoming = normalize(snap.data());
+        if (JSON.stringify(incoming) === JSON.stringify(dataRef.current)) return;
+        dataRef.current = incoming;
+        setData(incoming);
+      },
+      (err) => { console.error("Read failed:", err); setBanner("read-error"); }
+    );
+    return unsub;
+  }, []);
+
+  // wrapped updater: local state now, debounced write to Firestore
+  const update = (fnOrVal) => {
+    setData((prev) => {
+      const next = typeof fnOrVal === "function" ? fnOrVal(prev) : fnOrVal;
+      dataRef.current = next;
+      dirty.current = true;
+      clearTimeout(writeTimer.current);
+      writeTimer.current = setTimeout(() => writeNow(next), 600);
+      return next;
+    });
+  };
+
+  const flash = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 1800);
+  };
+
+  if (!data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-400">
+        Loading…
+      </div>
+    );
+  }
+
+  const { roster, matches, live, teamName } = data;
+  const nameOf = (id) => (roster.find((p) => p.id === id) || {}).name || "—";
+
+  const appeared = (m, pid) =>
+    (m.appearances || []).includes(pid) || (m.goals && m.goals[pid] > 0) || (m.assists && m.assists[pid] > 0);
+  const stats = roster
+    .filter((p) => p.active)
+    .map((p) => ({
+      ...p,
+      games: matches.filter((m) => appeared(m, p.id)).length,
+      goals: matches.reduce((a, m) => a + ((m.goals && m.goals[p.id]) || 0), 0),
+      assists: matches.reduce((a, m) => a + ((m.assists && m.assists[p.id]) || 0), 0)
+    }))
+    .sort((a, b) => b.goals - a.goals || b.assists - a.assists || b.games - a.games || a.name.localeCompare(b.name));
+
+  const bannerText = {
+    offline: "Not connected to a database — add your Firebase config to save. Changes now are temporary.",
+    "save-error": "Couldn't save — check your Firestore rules allow writes to season/current.",
+    "read-error": "Couldn't reach the database — check your config and rules."
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto flex min-h-screen max-w-md flex-col">
+        {banner && (
+          <div className={"px-4 py-2 text-center text-xs font-medium " + (banner === "offline" ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800")}>
+            {bannerText[banner]}
+          </div>
+        )}
+        <main className="flex-1 px-4 pb-28 pt-6">
+          {tab === "scorers" && (<Scorers stats={stats} setData={update} roster={roster} teamName={teamName} flash={flash} />)}
+          {tab === "matches" && (<Matches data={data} setData={update} nameOf={nameOf} roster={roster} teamName={teamName} flash={flash} />)}
+          {tab === "live" && (<Live data={data} setData={update} roster={roster} teamName={teamName} setTab={setTab} flash={flash} />)}
+        </main>
+
+        {toast && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center">
+            <div className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg">{toast}</div>
+          </div>
+        )}
+
+        <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-slate-200 bg-white">
+          <div className="grid grid-cols-3">
+            {[
+              { id: "scorers", label: "Top Scorers", Icon: Trophy },
+              { id: "matches", label: "Matches", Icon: CalendarDays },
+              { id: "live", label: "Live", Icon: Radio }
+            ].map(({ id, label, Icon }) => {
+              const on = tab === id;
+              const liveOn = id === "live" && live;
+              return (
+                <button key={id} onClick={() => setTab(id)}
+                  className={"flex flex-col items-center gap-1 py-2.5 text-xs font-medium " + (on ? "text-emerald-600" : "text-slate-400")}>
+                  <span className="relative">
+                    <Icon size={22} strokeWidth={on ? 2.4 : 2} />
+                    {liveOn && (<span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" />)}
+                  </span>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Top Scorers + Squad editor ----------
+
+function Scorers({ stats, setData, roster, teamName, flash }) {
+  const [manage, setManage] = useState(false);
+  const [name, setName] = useState("");
+  const [remove, setRemove] = useState(null);
+  const squad = roster.filter((p) => p.active);
+
+  const addPlayer = () => {
+    const n = name.trim();
+    if (!n) return;
+    setData((d) => ({ ...d, roster: [...d.roster, { id: uid(), name: n, active: true }] }));
+    setName("");
+  };
+  const rename = (id, value) =>
+    setData((d) => ({
+      ...d,
+      roster: d.roster.map((p) => (p.id === id ? { ...p, name: value } : p)),
+    }));
+
+  return (
+    <div>
+      <div className="flex items-end justify-between">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold uppercase tracking-widest text-emerald-600">
+            {teamName}
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight">Top Scorers</h1>
+        </div>
+        <button
+          onClick={() => setManage((v) => !v)}
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 active:bg-slate-100"
+        >
+          {manage ? <Check size={16} /> : <Users size={16} />}
+          {manage ? "Done" : "Squad"}
+        </button>
+      </div>
+
+      {manage ? (
+        <div className="mt-5">
+          <div className="flex gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+              placeholder="Add a player"
+              className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+            />
+            <button
+              onClick={addPlayer}
+              className="flex items-center gap-1 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white active:bg-emerald-700"
+            >
+              <UserPlus size={16} /> Add
+            </button>
+          </div>
+
+          <p className="mb-2 mt-5 px-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Edit squad
+          </p>
+          {squad.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400">
+              No players yet. Add your first one above.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {squad.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-2 border-b border-slate-50 px-3 py-2 last:border-0"
+                >
+                  <Pencil size={14} className="shrink-0 text-slate-300" />
+                  <input
+                    value={p.name}
+                    onChange={(e) => rename(p.id, e.target.value)}
+                    className="flex-1 rounded-lg px-1 py-1.5 text-sm font-medium outline-none focus:bg-slate-50"
+                  />
+                  <button
+                    onClick={() => setRemove(p)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-300 active:bg-rose-50 active:text-rose-500"
+                    aria-label={`remove ${p.name}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : squad.length === 0 ? (
+        <Empty
+          icon={<Users size={26} />}
+          title="Build your squad"
+          body='Tap "Squad" above to add your players. Their goals and assists show up here.'
+        />
+      ) : (
+        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <table className="w-full table-fixed border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                <th className="px-4 py-2.5 text-left font-semibold">Player</th>
+                <th className="w-14 py-2.5 text-center font-semibold">P</th>
+                <th className="w-14 py-2.5 text-center font-semibold text-emerald-600">G</th>
+                <th className="w-14 py-2.5 text-center font-semibold">A</th>
+                <th className="w-14 py-2.5 text-center font-semibold">G+A</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.map((p, i) => {
+                const lead = i === 0 && p.goals > 0;
+                return (
+                  <tr
+                    key={p.id}
+                    className={
+                      "border-b border-slate-100 last:border-0 " + (lead ? "bg-emerald-50" : "")
+                    }
+                  >
+                    <td className="truncate px-4 py-3.5 font-medium text-slate-900">{p.name}</td>
+                    <td className="py-3.5 text-center tabular-nums text-slate-400">{p.games}</td>
+                    <td className="py-3.5 text-center font-bold tabular-nums text-emerald-600">
+                      {p.goals}
+                    </td>
+                    <td className="py-3.5 text-center tabular-nums text-slate-600">{p.assists}</td>
+                    <td className="py-3.5 text-center font-semibold tabular-nums text-slate-900">
+                      {p.goals + p.assists}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {remove && (
+        <Modal
+          title={`Remove ${remove.name}?`}
+          body="They'll be taken off the squad list. Their goals and assists in past matches stay recorded."
+          confirmLabel="Remove"
+          danger
+          onCancel={() => setRemove(null)}
+          onConfirm={() => {
+            setData((d) => ({
+              ...d,
+              roster: d.roster.map((r) => (r.id === remove.id ? { ...r, active: false } : r)),
+            }));
+            setRemove(null);
+            flash("Player removed");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------- Matches ----------
+
+function Matches({ data, setData, nameOf, roster, teamName, flash }) {
+  const [openId, setOpenId] = useState(null);
+  const { matches } = data;
+  const match = matches.find((m) => m.id === openId);
+
+  if (match) {
+    return (
+      <MatchDetail
+        match={match}
+        setData={setData}
+        nameOf={nameOf}
+        roster={roster}
+        teamName={teamName}
+        onBack={() => setOpenId(null)}
+        flash={flash}
+      />
+    );
+  }
+
+  const sorted = [...matches].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  return (
+    <div>
+      <p className="truncate text-xs font-semibold uppercase tracking-widest text-emerald-600">
+        {teamName}
+      </p>
+      <h1 className="text-2xl font-bold tracking-tight">Matches</h1>
+
+      {sorted.length === 0 ? (
+        <Empty
+          icon={<CalendarDays size={26} />}
+          title="No matches yet"
+          body="Head to the Live tab to record your first match. It'll appear here when you finish."
+        />
+      ) : (
+        <div className="mt-5 space-y-2.5">
+          {sorted.map((m) => {
+            const us = ourScore(m);
+            const home = m.home ?? true;
+            const s = sides(teamName, m.opposition, us, m.oppGoals, home);
+            return (
+              <button
+                key={m.id}
+                onClick={() => setOpenId(m.id)}
+                className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-left active:bg-slate-50"
+              >
+                <ResultBadge us={us} them={m.oppGoals} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold">
+                    {s.l} <span className="text-slate-300">v</span> {s.r}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    {fmtDate(m.date, true)} · {home ? "Home" : "Away"}
+                  </div>
+                </div>
+                <div className="shrink-0 text-lg font-bold tabular-nums">
+                  {s.ls}
+                  <span className="mx-1 text-slate-300">–</span>
+                  {s.rs}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }) {
+  const [editing, setEditing] = useState(false);
+  const [del, setDel] = useState(false);
+  const [draft, setDraft] = useState(null);
+
+  const startEdit = () => {
+    setDraft({
+      date: match.date,
+      opposition: match.opposition || "",
+      goals: { ...(match.goals || {}) },
+      assists: { ...(match.assists || {}) },
+      oppGoals: match.oppGoals || 0,
+      home: match.home ?? true,
+    });
+    setEditing(true);
+  };
+
+  const bump = (field, pid, delta) =>
+    setDraft((d) => ({
+      ...d,
+      [field]: { ...d[field], [pid]: Math.max(0, (d[field][pid] || 0) + delta) },
+    }));
+
+  const save = () => {
+    setData((data) => ({
+      ...data,
+      matches: data.matches.map((m) =>
+        m.id === match.id
+          ? {
+              ...m,
+              date: draft.date,
+              opposition: draft.opposition.trim(),
+              goals: stripZeros(draft.goals),
+              assists: stripZeros(draft.assists),
+              oppGoals: draft.oppGoals,
+              home: draft.home,
+            }
+          : m
+      ),
+    }));
+    setEditing(false);
+    flash("Match updated");
+  };
+
+  const editablePlayers = roster.filter(
+    (p) => p.active || match.goals?.[p.id] || match.assists?.[p.id]
+  );
+  const scorers = Object.entries(match.goals || {}).filter(([, v]) => v > 0);
+  const assisters = Object.entries(match.assists || {}).filter(([, v]) => v > 0);
+  const us = ourScore(match);
+  const home = match.home ?? true;
+  const s = sides(teamName, match.opposition, us, match.oppGoals, home);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={editing ? () => setEditing(false) : onBack}
+          className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 active:bg-slate-100"
+        >
+          <ChevronLeft size={18} /> {editing ? "Cancel" : "Matches"}
+        </button>
+        {!editing && (
+          <div className="flex gap-1">
+            <button
+              onClick={startEdit}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 active:bg-slate-100"
+            >
+              <Pencil size={15} /> Edit
+            </button>
+            <button
+              onClick={() => setDel(true)}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-rose-500 active:bg-rose-50"
+            >
+              <Trash2 size={15} /> Delete
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!editing ? (
+        <>
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-5 text-center">
+            <div className="flex items-center justify-center gap-2 text-xs font-medium text-slate-400">
+              <ResultBadge us={us} them={match.oppGoals} />
+              {fmtDate(match.date, true)} · {home ? "Home" : "Away"}
+            </div>
+            <div className="mt-3 flex items-center justify-center gap-3">
+              <div className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-slate-500">
+                {s.l}
+              </div>
+              <div className="shrink-0 text-4xl font-bold tabular-nums">
+                {s.ls}
+                <span className="mx-2 text-slate-300">–</span>
+                {s.rs}
+              </div>
+              <div className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-500">
+                {s.r}
+              </div>
+            </div>
+          </div>
+
+          <Section title="Goals">
+            {scorers.length ? (
+              scorers.map(([pid, v]) => (
+                <StatRow key={pid} name={nameOf(pid)} count={v} tone="goal" />
+              ))
+            ) : (
+              <p className="px-4 py-3 text-sm text-slate-400">No goals recorded.</p>
+            )}
+          </Section>
+
+          <Section title="Assists">
+            {assisters.length ? (
+              assisters.map(([pid, v]) => <StatRow key={pid} name={nameOf(pid)} count={v} />)
+            ) : (
+              <p className="px-4 py-3 text-sm text-slate-400">No assists recorded.</p>
+            )}
+          </Section>
+        </>
+      ) : (
+        <div className="mt-3 space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Date
+            </label>
+            <input
+              type="date"
+              value={draft.date}
+              onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+            />
+            <label className="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Opposition
+            </label>
+            <input
+              value={draft.opposition}
+              onChange={(e) => setDraft((d) => ({ ...d, opposition: e.target.value }))}
+              placeholder="e.g. Riverside FC"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+            />
+            <label className="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Venue
+            </label>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {[
+                { v: true, label: "Home" },
+                { v: false, label: "Away" },
+              ].map(({ v, label }) => (
+                <button
+                  key={label}
+                  onClick={() => setDraft((d) => ({ ...d, home: v }))}
+                  className={
+                    "rounded-xl py-2.5 text-sm font-semibold " +
+                    (draft.home === v
+                      ? "bg-emerald-600 text-white"
+                      : "border border-slate-200 text-slate-600 active:bg-slate-50")
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold">Opposition goals</span>
+              <Stepper
+                value={draft.oppGoals}
+                onDec={() => setDraft((d) => ({ ...d, oppGoals: Math.max(0, d.oppGoals - 1) }))}
+                onInc={() => setDraft((d) => ({ ...d, oppGoals: d.oppGoals + 1 }))}
+              />
+            </div>
+          </div>
+
+          <EditPlayers players={editablePlayers} draft={draft} bump={bump} />
+
+          <button
+            onClick={save}
+            className="w-full rounded-2xl bg-emerald-600 py-3.5 font-semibold text-white active:bg-emerald-700"
+          >
+            Save changes
+          </button>
+        </div>
+      )}
+
+      {del && (
+        <Modal
+          title="Delete this match?"
+          body="This removes the match and its goals and assists from your season totals. It can't be undone."
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setDel(false)}
+          onConfirm={() => {
+            setData((d) => ({ ...d, matches: d.matches.filter((m) => m.id !== match.id) }));
+            flash("Match deleted");
+            onBack();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditPlayers({ players, draft, bump }) {
+  if (players.length === 0)
+    return (
+      <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">
+        Add players from the Top Scorers tab to record scorers.
+      </p>
+    );
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      {players.map((p) => (
+        <div key={p.id} className="border-b border-slate-50 px-4 py-3 last:border-0">
+          <div className="font-medium">{p.name}</div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="w-14 text-xs font-semibold uppercase tracking-wider text-emerald-600">
+              Goals
+            </span>
+            <Stepper
+              tone="goal"
+              value={draft.goals[p.id] || 0}
+              onDec={() => bump("goals", p.id, -1)}
+              onInc={() => bump("goals", p.id, 1)}
+            />
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="w-14 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Assists
+            </span>
+            <Stepper
+              value={draft.assists[p.id] || 0}
+              onDec={() => bump("assists", p.id, -1)}
+              onInc={() => bump("assists", p.id, 1)}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatRow({ name, count, tone }) {
+  return (
+    <div className="flex items-center justify-between border-b border-slate-50 px-4 py-3 last:border-0">
+      <span className="font-medium">{name}</span>
+      <span
+        className={
+          "rounded-lg px-2 py-0.5 text-sm font-bold tabular-nums " +
+          (tone === "goal" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600")
+        }
+      >
+        ×{count}
+      </span>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div className="mt-4">
+      <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        {title}
+      </h2>
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">{children}</div>
+    </div>
+  );
+}
+
+// ---------- Live ----------
+
+function Live({ data, setData, roster, teamName, setTab, flash }) {
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [oppSheet, setOppSheet] = useState(false);
+  const [oppDraft, setOppDraft] = useState("");
+  const [warn, setWarn] = useState(null);
+  const { live } = data;
+
+  const start = () =>
+    setData((d) => ({
+      ...d,
+      live: {
+        date: today(),
+        opposition: "",
+        home: true,
+        goals: {},
+        assists: {},
+        oppGoals: 0,
+        playing: Object.fromEntries(
+          d.roster.filter((p) => p.active).map((p) => [p.id, true])
+        ),
+      },
+    }));
+
+  if (!live) {
+    return (
+      <div className="flex min-h-96 flex-col">
+        <p className="truncate text-xs font-semibold uppercase tracking-widest text-emerald-600">
+          {teamName}
+        </p>
+        <h1 className="text-2xl font-bold tracking-tight">Live</h1>
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+            <Radio size={30} />
+          </div>
+          <p className="mt-4 max-w-xs text-slate-500">
+            No match in progress. Kick off to start tracking goals and assists in real time.
+          </p>
+          <button
+            onClick={start}
+            className="mt-6 rounded-2xl bg-emerald-600 px-8 py-3.5 text-base font-semibold text-white shadow-sm active:bg-emerald-700"
+          >
+            Start match
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const us = ourScore(live);
+  const s = sides(teamName, live.opposition, us, live.oppGoals, live.home);
+  const bump = (field, pid, delta) =>
+    setData((d) => ({
+      ...d,
+      live: {
+        ...d.live,
+        [field]: { ...d.live[field], [pid]: Math.max(0, (d.live[field][pid] || 0) + delta) },
+      },
+    }));
+  const setOpp = (v) => setData((d) => ({ ...d, live: { ...d.live, opposition: v } }));
+  const bumpOpp = (delta) =>
+    setData((d) => ({ ...d, live: { ...d.live, oppGoals: Math.max(0, d.live.oppGoals + delta) } }));
+  const toggleHome = () => setData((d) => ({ ...d, live: { ...d.live, home: !d.live.home } }));
+
+  const isPlaying = (pid) => live.playing?.[pid] !== false;
+  const setPlaying = (pid, val) =>
+    setData((d) => ({ ...d, live: { ...d.live, playing: { ...d.live.playing, [pid]: val } } }));
+  const tryToggle = (p) => {
+    if (isPlaying(p.id)) {
+      if ((live.goals[p.id] || 0) > 0 || (live.assists[p.id] || 0) > 0) {
+        setWarn(p.name);
+        return;
+      }
+      setPlaying(p.id, false);
+    } else {
+      setPlaying(p.id, true);
+    }
+  };
+
+  const openOpp = () => {
+    setOppDraft(live.opposition || "");
+    setOppSheet(true);
+  };
+  const saveOpp = () => {
+    setOpp(oppDraft.trim());
+    setOppSheet(false);
+  };
+
+  const players = roster.filter((p) => p.active || live.goals[p.id] || live.assists[p.id]);
+
+  const end = () => {
+    const record = {
+      id: uid(),
+      date: live.date,
+      opposition: live.opposition.trim(),
+      home: live.home,
+      goals: stripZeros(live.goals),
+      assists: stripZeros(live.assists),
+      oppGoals: live.oppGoals,
+      appearances: players.filter((p) => isPlaying(p.id)).map((p) => p.id),
+    };
+    setData((d) => ({ ...d, matches: [record, ...d.matches], live: null }));
+    setConfirmEnd(false);
+    flash("Match saved to your season");
+    setTab("matches");
+  };
+  const discard = () => {
+    setData((d) => ({ ...d, live: null }));
+    setConfirmEnd(false);
+    flash("Match discarded");
+  };
+
+  return (
+    <div>
+      {/* Floodlit scoreboard */}
+      <div className="rounded-2xl bg-slate-900 p-5 text-white shadow-sm">
+        <div className="flex items-center justify-between text-xs font-medium uppercase tracking-widest text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" /> Live
+          </span>
+          <span>{fmtDate(live.date, true)}</span>
+        </div>
+
+        {/* two stacked sides: label / score / name, with a reverse swap in the middle */}
+        <div className="mt-4 flex items-center gap-2">
+          <ScoreSide
+            label={live.home ? "Home" : "Away"}
+            score={s.ls}
+            ours={live.home}
+            teamName={teamName}
+            opposition={live.opposition}
+            onNameTap={openOpp}
+          />
+          <button
+            onClick={toggleHome}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700 text-slate-100 active:bg-slate-600"
+            aria-label="Swap home and away"
+          >
+            <ArrowLeftRight size={16} />
+          </button>
+          <ScoreSide
+            label={live.home ? "Away" : "Home"}
+            score={s.rs}
+            ours={!live.home}
+            teamName={teamName}
+            opposition={live.opposition}
+            onNameTap={openOpp}
+          />
+        </div>
+      </div>
+
+      {/* Opposition goals: just + / − (total shows on the scoreboard) */}
+      <div className="mt-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+        <span className="font-semibold">Opposition goals</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => bumpOpp(-1)}
+            disabled={live.oppGoals <= 0}
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 active:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none"
+            aria-label="remove opposition goal"
+          >
+            <Minus size={18} strokeWidth={2.5} />
+          </button>
+          <button
+            onClick={() => bumpOpp(1)}
+            className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800 text-white active:bg-slate-900"
+            aria-label="add opposition goal"
+          >
+            <Plus size={18} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+
+      {/* Our players */}
+      <h2 className="mb-2 mt-5 px-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        Our players
+      </h2>
+      {players.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400">
+          No players yet. Add your squad from the Top Scorers tab, then come back — the match keeps
+          running.
+        </p>
+      ) : (
+        <div className="space-y-2.5">
+          {players.map((p) => {
+            const playing = isPlaying(p.id);
+            return (
+              <div
+                key={p.id}
+                className={
+                  "rounded-2xl border px-4 py-3 " +
+                  (playing ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50")
+                }
+              >
+                <div className="flex items-center justify-between">
+                  <div className={"font-semibold " + (playing ? "" : "text-slate-400")}>
+                    {p.name}
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={playing}
+                    onClick={() => tryToggle(p)}
+                    className="flex items-center gap-2"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Playing
+                    </span>
+                    <span
+                      className={
+                        "relative h-6 w-11 rounded-full transition-colors " +
+                        (playing ? "bg-emerald-500" : "bg-slate-300")
+                      }
+                    >
+                      <span
+                        className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
+                        style={{ left: playing ? 22 : 2 }}
+                      />
+                    </span>
+                  </button>
+                </div>
+                <div className="mt-2.5 flex items-center gap-5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-9 text-xs font-semibold uppercase tracking-wider text-emerald-600">
+                      Goal
+                    </span>
+                    <Stepper
+                      tone="goal"
+                      disabled={!playing}
+                      value={live.goals[p.id] || 0}
+                      onDec={() => bump("goals", p.id, -1)}
+                      onInc={() => bump("goals", p.id, 1)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-11 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      Assist
+                    </span>
+                    <Stepper
+                      disabled={!playing}
+                      value={live.assists[p.id] || 0}
+                      onDec={() => bump("assists", p.id, -1)}
+                      onInc={() => bump("assists", p.id, 1)}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <button
+        onClick={() => setConfirmEnd(true)}
+        className="mt-6 w-full rounded-2xl border border-slate-300 bg-white py-3.5 font-semibold text-slate-800 active:bg-slate-100"
+      >
+        Finish match
+      </button>
+
+      {confirmEnd && (
+        <Modal
+          title="Finish the match?"
+          body={`Final score ${s.l} ${s.ls} – ${s.rs} ${s.r}. Saving adds it to your season and updates the totals. Discard throws it away.`}
+          confirmLabel="Finish & save"
+          secondaryLabel="Discard match"
+          onConfirm={end}
+          onSecondary={discard}
+          onCancel={() => setConfirmEnd(false)}
+        />
+      )}
+
+      {oppSheet && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-900">Opposition name</h3>
+            <input
+              autoFocus
+              value={oppDraft}
+              onChange={(e) => setOppDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveOpp()}
+              placeholder="e.g. Riverside FC"
+              className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+            />
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setOppSheet(false)}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveOpp}
+                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white active:bg-emerald-700"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {warn && (
+        <Modal
+          single
+          title={`${warn} can't be benched`}
+          body="They've already got a goal or assist in this match. Clear those first if they aren't playing."
+          confirmLabel="Got it"
+          onConfirm={() => setWarn(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ScoreSide({ label, score, ours, teamName, opposition, onNameTap }) {
+  return (
+    <div className="min-w-0 flex-1 text-center">
+      <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="my-1 text-5xl font-bold tabular-nums">{score}</div>
+      {ours ? (
+        <div className="px-1 text-sm font-semibold leading-tight text-white">{teamName}</div>
+      ) : opposition ? (
+        <button
+          onClick={onNameTap}
+          className="mx-auto block max-w-full truncate rounded-lg px-2 py-0.5 text-sm font-semibold leading-tight text-white active:bg-slate-800"
+        >
+          {opposition}
+        </button>
+      ) : (
+        <button
+          onClick={onNameTap}
+          className="mx-auto inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-emerald-300 active:bg-slate-700"
+        >
+          <Plus size={13} strokeWidth={2.5} /> Add name
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Empty({ icon, title, body }) {
+  return (
+    <div className="mt-10 flex flex-col items-center text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+        {icon}
+      </div>
+      <h3 className="mt-4 font-semibold">{title}</h3>
+      <p className="mt-1 max-w-xs text-sm text-slate-500">{body}</p>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+  </script>
+</body>
+</html>
