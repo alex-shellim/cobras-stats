@@ -55,7 +55,8 @@ try {
 }
 
 const normalize = (d) => ({
-  teamName: (d && d.teamName) || TEAM_NAME,
+  teamName: d && typeof d.teamName === "string" ? d.teamName : TEAM_NAME,
+  clubName: d && typeof d.clubName === "string" ? d.clubName : "",
   roster: Array.isArray(d && d.roster) ? d.roster : [],
   matches: Array.isArray(d && d.matches) ? d.matches : [],
   live: (d && d.live) || null
@@ -82,25 +83,49 @@ const ArrowLeftRight = (p) => <Svg {...p}><path d="M8 3 4 7l4 4" /><path d="M4 7
 const Trophy = (p) => <Svg {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></Svg>;
 const CalendarDays = (p) => <Svg {...p}><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></Svg>;
 const Radio = (p) => <Svg {...p}><path d="M4.9 19.1a10 10 0 0 1 0-14.2" /><path d="M7.8 16.2a6 6 0 0 1 0-8.5" /><circle cx="12" cy="12" r="2" /><path d="M16.2 7.8a6 6 0 0 1 0 8.5" /><path d="M19.1 4.9a10 10 0 0 1 0 14.2" /></Svg>;
-const FigureRun = (p) => (
-  <Svg {...p}>
-    <circle cx="15" cy="4.5" r="2" />
-    <path d="M14 7 9.5 12.5" />
-    <path d="M9.5 12.5 13 15.5 11.5 20" />
-    <path d="M9.5 12.5 5.5 15" />
-    <path d="M7 9.5 12 8.5 16 11.5" />
-  </Svg>
+// Filled glyphs to mirror the SF Symbols used in the Figma bottom nav
+// (figure.indoor.soccer, calendar, soccerball).
+function Glyph({ size = 20, className, children }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}
+      fill="currentColor" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </svg>
+  );
+}
+const FigureSoccer = (p) => (
+  <Glyph {...p}>
+    <circle cx="15.6" cy="3.6" r="2.1" stroke="none" />
+    <g fill="none" strokeWidth="2.6">
+      <path d="M15.2 7.4 10.5 12.4" />
+      <path d="M14.4 8.6 10.6 5.6" />
+      <path d="M13.4 9.6 17.4 11.2" />
+      <path d="M10.5 12.4 14.8 13.6 17.8 11" />
+      <path d="M10.5 12.4 7.4 16.6 9 20" />
+    </g>
+    <circle cx="19.6" cy="13.2" r="1.9" stroke="none" />
+  </Glyph>
 );
-const Soccerball = (p) => (
-  <Svg {...p}>
-    <circle cx="12" cy="12" r="9.5" />
-    <path d="M12 6.8 16.6 10.2 14.8 15.6 9.2 15.6 7.4 10.2Z" />
-    <path d="M12 6.8V2.5" />
-    <path d="M16.6 10.2 20.9 8.9" />
-    <path d="M14.8 15.6 17.6 19.4" />
-    <path d="M9.2 15.6 6.4 19.4" />
-    <path d="M7.4 10.2 3.1 8.9" />
-  </Svg>
+const CalendarGlyph = (p) => (
+  <Glyph {...p}>
+    <rect x="2.5" y="2.5" width="19" height="19" rx="4" fill="none" strokeWidth="1.9" />
+    <path stroke="none" d="M2.5 8V6.5A4 4 0 0 1 6.5 2.5H17.5A4 4 0 0 1 21.5 6.5V8Z" />
+    <g stroke="none">
+      <circle cx="7.6" cy="12.4" r="1.1" /><circle cx="12" cy="12.4" r="1.1" /><circle cx="16.4" cy="12.4" r="1.1" />
+      <circle cx="7.6" cy="16.6" r="1.1" /><circle cx="12" cy="16.6" r="1.1" /><circle cx="16.4" cy="16.6" r="1.1" />
+    </g>
+  </Glyph>
+);
+const SoccerballGlyph = (p) => (
+  <Glyph {...p}>
+    <circle cx="12" cy="12" r="9" fill="none" strokeWidth="1.7" />
+    <path stroke="none" d="M12 6.7 15.9 9.5 14.4 14.1 9.6 14.1 8.1 9.5Z" />
+    <path stroke="none" d="M12 3 13.9 4.2 13.3 6 10.7 6 10.1 4.2Z" />
+    <path stroke="none" d="M20.5 9.6 21 11.8 19.4 12.7 17.9 10.8 18.9 9Z" />
+    <path stroke="none" d="M17.3 19.3 15.4 20.4 14.1 19 15.2 17.2 17.2 17.7Z" />
+    <path stroke="none" d="M6.7 19.3 8.6 20.4 9.9 19 8.8 17.2 6.8 17.7Z" />
+    <path stroke="none" d="M3.5 9.6 3 11.8 4.6 12.7 6.1 10.8 5.1 9Z" />
+  </Glyph>
 );
 
 
@@ -113,6 +138,7 @@ const uid = () =>
 const today = () => new Date().toISOString().slice(0, 10);
 const seed = () => ({
   teamName: TEAM_NAME,
+  clubName: "",
   roster: SQUAD.map((name) => ({ id: uid(), name, active: true })),
   matches: [],
   live: null,
@@ -232,6 +258,69 @@ function Modal({
   );
 }
 
+const CONFIRM_WORDS = [
+  "orange", "pencil", "guitar", "rocket", "planet", "silver",
+  "meadow", "tunnel", "cactus", "walnut", "puzzle", "anchor",
+  "ladder", "copper", "violet", "harbor", "cabin", "pepper",
+];
+const randomConfirmWord = () =>
+  CONFIRM_WORDS[Math.floor(Math.random() * CONFIRM_WORDS.length)];
+
+function DeleteTeamModal({ onCancel, onConfirm }) {
+  const [word] = useState(randomConfirmWord);
+  const [entry, setEntry] = useState("");
+  const ok = entry.trim().toLowerCase() === word;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+      style={{ backgroundColor: "rgba(15,23,42,0.45)" }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+        <h3 className="text-base font-semibold text-slate-900">Delete this team?</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          This wipes{" "}
+          <span className="font-semibold text-slate-700">everything</span> — every player, match and
+          result — and resets the app. You'll need to add a new team before you can use it again.
+          This can't be undone.
+        </p>
+        <p className="mt-4 text-sm text-slate-500">
+          Type{" "}
+          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-sm font-semibold tracking-widest text-slate-800">
+            {word}
+          </span>{" "}
+          to confirm.
+        </p>
+        <input
+          autoFocus
+          value={entry}
+          onChange={(e) => setEntry(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && ok && onConfirm()}
+          placeholder="Type the word"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-rose-500"
+        />
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!ok}
+            className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white active:bg-rose-700 disabled:pointer-events-none disabled:opacity-40"
+          >
+            Delete everything
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResultBadge({ us, them, size = "sm" }) {
   const r = us > them ? "W" : us < them ? "L" : "D";
   const map = {
@@ -246,6 +335,16 @@ function ResultBadge({ us, them, size = "sm" }) {
     >
       {r}
     </span>
+  );
+}
+
+// Sticky, blurred top bar — keeps the screen title + its action button
+// pinned to the top of the viewport while the content scrolls under it.
+function StickyHeader({ children }) {
+  return (
+    <div className="sticky top-0 z-20 -mx-4 -mt-6 mb-3 border-b border-black/[0.06] bg-white/80 px-4 pb-3 pt-6 backdrop-blur-xl">
+      {children}
+    </div>
   );
 }
 
@@ -323,7 +422,7 @@ function App() {
     );
   }
 
-  const { roster, matches, live, teamName } = data;
+  const { roster, matches, live, teamName, clubName } = data;
   const nameOf = (id) => (roster.find((p) => p.id === id) || {}).name || "—";
 
   const appeared = (m, pid) =>
@@ -353,7 +452,7 @@ function App() {
           </div>
         )}
         <main className="flex-1 px-4 pb-28 pt-6">
-          {tab === "scorers" && (<Scorers stats={stats} setData={update} roster={roster} teamName={teamName} flash={flash} />)}
+          {tab === "scorers" && (<Scorers stats={stats} setData={update} roster={roster} teamName={teamName} clubName={clubName} flash={flash} />)}
           {tab === "matches" && (<Matches data={data} setData={update} nameOf={nameOf} roster={roster} teamName={teamName} flash={flash} />)}
           {tab === "live" && (<Live data={data} setData={update} roster={roster} teamName={teamName} setTab={setTab} flash={flash} />)}
         </main>
@@ -367,8 +466,8 @@ function App() {
         <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-center gap-3 px-5 pb-6 pt-3">
           <div className="flex flex-1 items-center gap-1 rounded-[26px] border border-white/70 bg-white/70 p-1.5 shadow-lg shadow-black/5 backdrop-blur-xl">
             {[
-              { id: "scorers", label: "Team", Icon: FigureRun },
-              { id: "matches", label: "Results", Icon: CalendarDays }
+              { id: "scorers", label: "Team", Icon: FigureSoccer },
+              { id: "matches", label: "Results", Icon: CalendarGlyph }
             ].map(({ id, label, Icon }) => {
               const on = tab === id;
               return (
@@ -394,7 +493,7 @@ function App() {
               (tab === "live" ? "bg-[#0e0f0c] text-white" : "bg-white/70 text-[#0e0f0c]")
             }
           >
-            <Soccerball size={26} strokeWidth={1.8} />
+            <SoccerballGlyph size={26} />
             {live && (
               <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-rose-500 ring-2 ring-white" />
             )}
@@ -407,13 +506,25 @@ function App() {
 
 // ---------- Team (Top Scorers) + Squad editor ----------
 
-function StatCells({ cells }) {
+function StatCells({ cells, muted, dark }) {
+  const divider = dark ? "bg-white/20" : "bg-[#16330014]";
+  const text = dark
+    ? muted
+      ? "font-light text-white"
+      : "font-bold text-white"
+    : muted
+    ? "font-medium text-[#454745]"
+    : "font-bold text-black";
   return (
     <div className="flex shrink-0 items-stretch gap-1 self-stretch">
       {cells.map((c, i) => (
         <React.Fragment key={i}>
-          {i > 0 && <div className="w-px shrink-0 bg-[#16330014]" />}
-          <div className="flex w-8 items-center justify-center text-center text-base font-bold tabular-nums text-black">
+          {i > 0 && <div className={"w-px shrink-0 " + divider} />}
+          <div
+            className={
+              "flex w-8 items-center justify-center text-center text-base tabular-nums " + text
+            }
+          >
             {c}
           </div>
         </React.Fragment>
@@ -422,10 +533,11 @@ function StatCells({ cells }) {
   );
 }
 
-function Scorers({ stats, setData, roster, teamName, flash }) {
+function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
   const [manage, setManage] = useState(false);
   const [name, setName] = useState("");
   const [remove, setRemove] = useState(null);
+  const [deleteTeam, setDeleteTeam] = useState(false);
   const squad = roster.filter((p) => p.active);
 
   const addPlayer = () => {
@@ -442,94 +554,130 @@ function Scorers({ stats, setData, roster, teamName, flash }) {
 
   return (
     <div>
-      <div className="flex items-center gap-4 pt-1">
-        <h1 className="flex-1 truncate text-[34px] font-bold leading-none tracking-tight text-[#0e0f0c]">
-          Team
-        </h1>
-        <button
-          onClick={() => setManage((v) => !v)}
-          className="shrink-0 rounded-full bg-[#16330014] px-4 py-1.5 text-base font-bold text-[#454745] active:bg-[#1633001f]"
-        >
-          {manage ? "Done" : "Edit"}
-        </button>
-      </div>
+      <StickyHeader>
+        <div className="flex items-center gap-4">
+          <h1 className="flex-1 truncate text-[34px] font-bold leading-none tracking-tight text-[#0e0f0c]">
+            {manage ? "Manage" : "Team"}
+          </h1>
+          <button
+            onClick={() => setManage((v) => !v)}
+            className="shrink-0 rounded-full bg-[#16330014] px-4 py-1.5 text-base font-bold text-[#454745] active:bg-[#1633001f]"
+          >
+            {manage ? "Done" : "Manage"}
+          </button>
+        </div>
+      </StickyHeader>
 
       {manage ? (
-        <div className="mt-5">
-          <div className="flex gap-2">
+        <div className="mt-6 flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <label className="text-base font-bold text-black">
+              Club name <span className="font-normal text-[#454745]">(optional)</span>
+            </label>
             <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-              placeholder="Add a player"
-              className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#0e0f0c]"
+              value={clubName}
+              onChange={(e) => setData((d) => ({ ...d, clubName: e.target.value }))}
+              placeholder="e.g. Harpenden Colts"
+              className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none placeholder:text-[#0e0f0c66] focus:border-[#0e0f0c]"
             />
-            <button
-              onClick={addPlayer}
-              className="flex items-center gap-1 rounded-xl bg-[#0e0f0c] px-3 text-sm font-semibold text-white active:bg-black"
-            >
-              <UserPlus size={16} /> Add
-            </button>
           </div>
 
-          <p className="mb-2 mt-5 px-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Edit squad
-          </p>
-          {squad.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400">
-              No players yet. Add your first one above.
-            </p>
-          ) : (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              {squad.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-2 border-b border-slate-50 px-3 py-2 last:border-0"
-                >
-                  <Pencil size={14} className="shrink-0 text-slate-300" />
+          <div className="flex flex-col gap-2">
+            <label className="text-base font-bold text-black">Team name</label>
+            <input
+              value={teamName}
+              onChange={(e) => setData((d) => ({ ...d, teamName: e.target.value }))}
+              className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
+            />
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <label className="text-base font-bold text-black">Players</label>
+            {squad.length === 0 ? (
+              <p className="text-sm text-[#454745]">No players yet. Add one below.</p>
+            ) : (
+              squad.map((p) => (
+                <div key={p.id} className="flex items-center gap-2">
                   <input
                     value={p.name}
                     onChange={(e) => rename(p.id, e.target.value)}
-                    className="flex-1 rounded-lg px-1 py-1.5 text-sm font-medium outline-none focus:bg-slate-50"
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
                   />
                   <button
                     onClick={() => setRemove(p)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-300 active:bg-rose-50 active:text-rose-500"
-                    aria-label={`remove ${p.name}`}
+                    aria-label={`Remove ${p.name}`}
+                    className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={20} />
                   </button>
                 </div>
-              ))}
+              ))
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-base font-bold text-black">Add player</label>
+            <div className="flex items-center gap-2">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+                placeholder="New player"
+                className="h-11 min-w-0 flex-1 rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none placeholder:text-[#0e0f0c66] focus:border-[#0e0f0c]"
+              />
+              <button
+                onClick={addPlayer}
+                aria-label="Add player"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]"
+              >
+                <Plus size={20} strokeWidth={2.5} />
+              </button>
             </div>
-          )}
+          </div>
+
+          <button
+            onClick={() => setDeleteTeam(true)}
+            className="h-11 w-full rounded-full bg-[#16330014] text-base font-bold text-[#454745] active:bg-[#1633001f]"
+          >
+            Delete team
+          </button>
         </div>
       ) : squad.length === 0 ? (
         <Empty
           icon={<Users size={26} />}
           title="Build your squad"
-          body='Tap "Squad" above to add your players. Their goals and assists show up here.'
+          body='Tap "Manage" above to name your team and add players. Their goals and assists show up here.'
         />
       ) : (
-        <div className="mt-6 overflow-hidden rounded-2xl">
-          <div className="flex items-center justify-between bg-[#16330014] px-4">
-            <div className="py-4 text-base font-bold text-[#0e0f0c]">Player</div>
-            <StatCells cells={["P", "G", "A", "G/A"]} />
+        <div className="mt-6 overflow-hidden rounded-3xl bg-[#163300] pt-4">
+          <div className="px-4">
+            {clubName.trim() && (
+              <p className="truncate text-base text-white">{clubName}</p>
+            )}
+            <p className="truncate text-[34px] font-bold leading-none tracking-tight text-[#9fe870]">
+              {teamName.trim() || "Team"}
+            </p>
           </div>
-          {stats.map((p, i) => (
-            <div
-              key={p.id}
-              className={
-                "flex items-center justify-between px-4 " +
-                (i % 2 === 1 ? "bg-[#16330014]" : "bg-white")
-              }
-            >
-              <div className="min-w-0 flex-1 truncate py-4 pr-3 text-base font-bold text-[#0e0f0c]">
-                {p.name}
-              </div>
-              <StatCells cells={[p.games, p.goals, p.assists, p.goals + p.assists]} />
+          <div className="mt-4">
+            <div className="flex items-center justify-between bg-[#16330014] px-4">
+              <div className="py-2 text-base font-light text-white">Player</div>
+              <StatCells cells={["P", "G", "A", "G+A"]} dark muted />
             </div>
-          ))}
+            {stats.map((p, i) => (
+              <div
+                key={p.id}
+                className={
+                  "flex items-center justify-between px-4 " +
+                  (i % 2 === 0 ? "bg-black/40" : "bg-black/20")
+                }
+              >
+                <div className="min-w-0 flex-1 truncate py-4 pr-3 text-base font-bold text-[#9fe870]">
+                  {p.name}
+                </div>
+                <StatCells cells={[p.games, p.goals, p.assists, p.goals + p.assists]} dark />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -547,6 +695,18 @@ function Scorers({ stats, setData, roster, teamName, flash }) {
             }));
             setRemove(null);
             flash("Player removed");
+          }}
+        />
+      )}
+
+      {deleteTeam && (
+        <DeleteTeamModal
+          onCancel={() => setDeleteTeam(false)}
+          onConfirm={() => {
+            setData(() => ({ teamName: "", clubName: "", roster: [], matches: [], live: null }));
+            setDeleteTeam(false);
+            setManage(false);
+            flash("Team deleted — add a new team to start");
           }}
         />
       )}
@@ -579,10 +739,12 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
 
   return (
     <div>
-      <p className="truncate text-xs font-semibold uppercase tracking-widest text-emerald-600">
-        {teamName}
-      </p>
-      <h1 className="text-2xl font-bold tracking-tight">Matches</h1>
+      <StickyHeader>
+        <p className="truncate text-xs font-semibold uppercase tracking-widest text-emerald-600">
+          {teamName}
+        </p>
+        <h1 className="text-2xl font-bold tracking-tight">Matches</h1>
+      </StickyHeader>
 
       {sorted.length === 0 ? (
         <Empty
@@ -680,30 +842,32 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <button
-          onClick={editing ? () => setEditing(false) : onBack}
-          className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 active:bg-slate-100"
-        >
-          <ChevronLeft size={18} /> {editing ? "Cancel" : "Matches"}
-        </button>
-        {!editing && (
-          <div className="flex gap-1">
-            <button
-              onClick={startEdit}
-              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 active:bg-slate-100"
-            >
-              <Pencil size={15} /> Edit
-            </button>
-            <button
-              onClick={() => setDel(true)}
-              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-rose-500 active:bg-rose-50"
-            >
-              <Trash2 size={15} /> Delete
-            </button>
-          </div>
-        )}
-      </div>
+      <StickyHeader>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={editing ? () => setEditing(false) : onBack}
+            className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 active:bg-slate-100"
+          >
+            <ChevronLeft size={18} /> {editing ? "Cancel" : "Matches"}
+          </button>
+          {!editing && (
+            <div className="flex gap-1">
+              <button
+                onClick={startEdit}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 active:bg-slate-100"
+              >
+                <Pencil size={15} /> Edit
+              </button>
+              <button
+                onClick={() => setDel(true)}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-rose-500 active:bg-rose-50"
+              >
+                <Trash2 size={15} /> Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </StickyHeader>
 
       {!editing ? (
         <>
@@ -924,10 +1088,12 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   if (!live) {
     return (
       <div className="flex min-h-96 flex-col">
-        <p className="truncate text-xs font-semibold uppercase tracking-widest text-emerald-600">
-          {teamName}
-        </p>
-        <h1 className="text-2xl font-bold tracking-tight">Live</h1>
+        <StickyHeader>
+          <p className="truncate text-xs font-semibold uppercase tracking-widest text-emerald-600">
+            {teamName}
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight">Live</h1>
+        </StickyHeader>
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
             <Radio size={30} />
