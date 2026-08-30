@@ -212,9 +212,9 @@ function Modal({
     "w-full rounded-xl py-2.5 text-sm font-semibold text-white " +
     (danger ? "bg-rose-600 active:bg-rose-700" : "bg-emerald-600 active:bg-emerald-700");
   const neutral =
-    "flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50";
+    "w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50";
   const secondary =
-    "flex-1 rounded-xl border border-rose-200 py-2.5 text-sm font-semibold text-rose-600 active:bg-rose-50";
+    "w-full rounded-xl border border-rose-200 py-2.5 text-sm font-semibold text-rose-600 active:bg-rose-50";
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
       <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
@@ -227,26 +227,24 @@ function Modal({
             </button>
           </div>
         ) : secondaryLabel ? (
-          <div className="mt-5 space-y-2">
+          <div className="mt-5 flex flex-col gap-2">
             <button onClick={onConfirm} className={confirmCls}>
               {confirmLabel}
             </button>
-            <div className="flex gap-2">
-              <button onClick={onSecondary} className={secondary}>
-                {secondaryLabel}
-              </button>
-              <button onClick={onCancel} className={neutral}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-5 flex gap-2">
+            <button onClick={onSecondary} className={secondary}>
+              {secondaryLabel}
+            </button>
             <button onClick={onCancel} className={neutral}>
               Cancel
             </button>
+          </div>
+        ) : (
+          <div className="mt-5 flex flex-col gap-2">
             <button onClick={onConfirm} className={confirmCls}>
               {confirmLabel}
+            </button>
+            <button onClick={onCancel} className={neutral}>
+              Cancel
             </button>
           </div>
         )}
@@ -298,19 +296,19 @@ function DeleteTeamModal({ onCancel, onConfirm }) {
           spellCheck={false}
           className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-rose-500"
         />
-        <div className="mt-4 flex gap-2">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
-          >
-            Cancel
-          </button>
+        <div className="mt-4 flex flex-col gap-2">
           <button
             onClick={onConfirm}
             disabled={!ok}
-            className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white active:bg-rose-700 disabled:pointer-events-none disabled:opacity-40"
+            className="w-full rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white active:bg-rose-700 disabled:pointer-events-none disabled:opacity-40"
           >
             Delete everything
+          </button>
+          <button
+            onClick={onCancel}
+            className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
+          >
+            Cancel
           </button>
         </div>
       </div>
@@ -352,11 +350,12 @@ function StickyHeader({ children }) {
 function App() {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("scorers");
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(null);
   const [banner, setBanner] = useState(docRef ? "" : "offline");
   const dirty = useRef(false);
   const dataRef = useRef(null);
   const writeTimer = useRef(null);
+  const toastTimer = useRef(null);
 
   const writeNow = (next) => {
     if (!docRef) return;
@@ -406,9 +405,14 @@ function App() {
     });
   };
 
-  const flash = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 1800);
+  const flash = (msg, action) => {
+    clearTimeout(toastTimer.current);
+    setToast({ msg, action: action || null });
+    toastTimer.current = setTimeout(() => setToast(null), action ? 5000 : 1800);
+  };
+  const dismissToast = () => {
+    clearTimeout(toastTimer.current);
+    setToast(null);
   };
 
   if (!data) {
@@ -455,8 +459,21 @@ function App() {
         </main>
 
         {toast && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center">
-            <div className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg">{toast}</div>
+          <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-4">
+            <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-slate-900 py-2 pl-4 pr-2 text-sm font-medium text-white shadow-lg">
+              <span>{toast.msg}</span>
+              {toast.action && (
+                <button
+                  onClick={() => {
+                    toast.action.onClick();
+                    dismissToast();
+                  }}
+                  className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white active:bg-white/25"
+                >
+                  {toast.action.label}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -686,12 +703,22 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
           danger
           onCancel={() => setRemove(null)}
           onConfirm={() => {
+            const removed = remove;
             setData((d) => ({
               ...d,
-              roster: d.roster.map((r) => (r.id === remove.id ? { ...r, active: false } : r)),
+              roster: d.roster.map((r) => (r.id === removed.id ? { ...r, active: false } : r)),
             }));
             setRemove(null);
-            flash("Player removed");
+            flash(`${removed.name} removed`, {
+              label: "Undo",
+              onClick: () =>
+                setData((d) => ({
+                  ...d,
+                  roster: d.roster.map((r) =>
+                    r.id === removed.id ? { ...r, active: true } : r
+                  ),
+                })),
+            });
           }}
         />
       )}
