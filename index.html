@@ -54,12 +54,33 @@ try {
   console.error("Firebase init failed:", e);
 }
 
+// The live match moved from goal/assist count maps to an event feed.
+// Migrate any doc still on the old shape so older sessions keep working.
+const normalizeLive = (l) => {
+  if (!l) return null;
+  if (Array.isArray(l.events)) return { active: l.active !== false, ...l };
+  const events = [];
+  Object.entries(l.goals || {}).forEach(([pid, n]) => {
+    for (let i = 0; i < n; i++)
+      events.push({ id: uid(), type: "team", scorerId: pid, assistId: null });
+  });
+  for (let i = 0; i < (l.oppGoals || 0); i++) events.push({ id: uid(), type: "opp" });
+  return {
+    date: l.date || today(),
+    opposition: l.opposition || "",
+    home: l.home !== false,
+    playing: l.playing || {},
+    active: true,
+    events,
+  };
+};
+
 const normalize = (d) => ({
   teamName: d && typeof d.teamName === "string" ? d.teamName : TEAM_NAME,
   clubName: d && typeof d.clubName === "string" ? d.clubName : "",
   roster: Array.isArray(d && d.roster) ? d.roster : [],
   matches: Array.isArray(d && d.matches) ? d.matches : [],
-  live: (d && d.live) || null
+  live: normalizeLive(d && d.live)
 });
 
 function Svg({ size = 20, strokeWidth = 2, className, children }) {
@@ -75,6 +96,8 @@ const Minus = (p) => <Svg {...p}><line x1="5" y1="12" x2="19" y2="12" /></Svg>;
 const Check = (p) => <Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>;
 const X = (p) => <Svg {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></Svg>;
 const ChevronLeft = (p) => <Svg {...p}><path d="m15 18-6-6 6-6" /></Svg>;
+const ChevronRight = (p) => <Svg {...p}><path d="m9 18 6-6-6-6" /></Svg>;
+const Stopwatch = (p) => <Svg {...p}><line x1="10" y1="2" x2="14" y2="2" /><line x1="12" y1="14" x2="15" y2="11" /><circle cx="12" cy="14" r="8" /></Svg>;
 const Trash2 = (p) => <Svg {...p}><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></Svg>;
 const Pencil = (p) => <Svg {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></Svg>;
 const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></Svg>;
@@ -508,7 +531,7 @@ function App() {
             }
           >
             <SoccerballGlyph size={26} />
-            {live && (
+            {live && live.active && (
               <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-rose-500 ring-2 ring-white" />
             )}
           </button>
@@ -1086,256 +1109,414 @@ function Section({ title, children }) {
 
 // ---------- Live ----------
 
+function Segmented({ tab, setTab }) {
+  const opt = (id, label) => {
+    const on = tab === id;
+    return (
+      <button
+        key={id}
+        onClick={() => setTab(id)}
+        className={
+          "flex-1 rounded-[20px] px-2 py-2 text-base transition-colors " +
+          (on ? "bg-white font-bold text-[#454745]" : "font-normal text-[#0e0f0c]")
+        }
+      >
+        {label}
+      </button>
+    );
+  };
+  return (
+    <div className="flex w-full items-center gap-1 rounded-full bg-[#16330014] p-0.5">
+      {opt("match", "Match")}
+      {opt("lineup", "Line-up")}
+    </div>
+  );
+}
+
+function LiveScoreboard({ s, live, teamName, onSwap, onNameTap }) {
+  return (
+    <div className="rounded-3xl bg-[#163300] p-4">
+      <div className="flex items-center justify-center gap-4">
+        <ScoreSide
+          label={live.home ? "Home" : "Away"}
+          score={s.ls}
+          ours={live.home}
+          teamName={teamName}
+          opposition={live.opposition}
+          onNameTap={onNameTap}
+        />
+        <button
+          onClick={onSwap}
+          aria-label="Swap home and away"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#e2f6d5] text-[#163300] active:bg-[#d3efc0]"
+        >
+          <ArrowLeftRight size={20} />
+        </button>
+        <ScoreSide
+          label={live.home ? "Away" : "Home"}
+          score={s.rs}
+          ours={!live.home}
+          teamName={teamName}
+          opposition={live.opposition}
+          onNameTap={onNameTap}
+        />
+      </div>
+    </div>
+  );
+}
+
+function LineUpTab({ players, isPlaying, onToggle, goalsOf, assistsOf }) {
+  if (players.length === 0)
+    return (
+      <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
+        No players yet. Add your squad from the Team tab.
+      </p>
+    );
+  return (
+    <div className="space-y-4">
+      {players.map((p) => {
+        const playing = isPlaying(p.id);
+        return (
+          <div
+            key={p.id}
+            className={"rounded-3xl bg-[#16330014] p-4 " + (playing ? "" : "opacity-60")}
+          >
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1 truncate pr-3 text-base font-bold text-[#0e0f0c]">
+                {p.name}
+              </div>
+              <button
+                role="switch"
+                aria-checked={playing}
+                onClick={() => onToggle(p)}
+                className="flex shrink-0 items-center gap-2"
+              >
+                <span className="text-base font-light text-[#0e0f0c]">Playing</span>
+                <span
+                  className={
+                    "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
+                    (playing ? "bg-[#34c759]" : "bg-black/20")
+                  }
+                >
+                  <span
+                    className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
+                    style={{ left: playing ? 22 : 2 }}
+                  />
+                </span>
+              </button>
+            </div>
+            <div className="mt-2 flex gap-3 text-base">
+              <span>
+                <span className="font-bold text-[#0e0f0c]">G: </span>
+                <span className="font-light text-[#0e0f0c]">{goalsOf(p.id)}</span>
+              </span>
+              <span>
+                <span className="font-bold text-[#0e0f0c]">A: </span>
+                <span className="font-light text-[#0e0f0c]">{assistsOf(p.id)}</span>
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GoalFeed({ events, nameOf, teamName, onEdit, onDeleteOpp }) {
+  if (events.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      <p className="text-base font-bold text-[#0e0f0c]">Goal feed</p>
+      {[...events].reverse().map((e) =>
+        e.type === "team" ? (
+          <div key={e.id} className="flex items-start gap-2 rounded-3xl bg-[#e2f6d5] p-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-base">
+                <span className="font-bold text-[#0e0f0c]">GOAL! </span>
+                <span className="font-light text-[#0e0f0c]">{teamName.trim() || "Team"}</span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-3 text-base">
+                <span>
+                  <span className="font-bold text-[#0e0f0c]">G: </span>
+                  <span className="font-light text-[#0e0f0c]">{nameOf(e.scorerId)}</span>
+                </span>
+                {e.assistId && (
+                  <span>
+                    <span className="font-bold text-[#0e0f0c]">A: </span>
+                    <span className="font-light text-[#0e0f0c]">{nameOf(e.assistId)}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => onEdit(e)}
+              className="shrink-0 rounded-full bg-[#16330014] px-4 py-1 text-base font-bold text-[#454745] active:bg-[#1633001f]"
+            >
+              Edit
+            </button>
+          </div>
+        ) : (
+          <div key={e.id} className="flex items-center gap-2 rounded-3xl bg-[#ff383c24] p-4">
+            <span className="min-w-0 flex-1 text-base font-bold text-[#0e0f0c]">
+              Opposition goal
+            </span>
+            <button
+              onClick={() => onDeleteOpp(e)}
+              className="shrink-0 rounded-full bg-[#16330014] px-4 py-1 text-base font-bold text-[#454745] active:bg-[#1633001f]"
+            >
+              Delete
+            </button>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
+  const [step, setStep] = useState("scorer");
+  const [scorerId, setScorerId] = useState(initial ? initial.scorerId : null);
+  const [assistId, setAssistId] = useState(initial ? initial.assistId : null);
+  const editing = !!initial;
+
+  const title = step === "scorer" ? "Goalscorer" : "Assist";
+  const selectedId = step === "scorer" ? scorerId : assistId;
+  const pick = (pid) => {
+    if (step === "scorer") setScorerId((c) => (c === pid ? null : pid));
+    else setAssistId((c) => (c === pid ? null : pid));
+  };
+  const iconBtn =
+    "flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f] disabled:pointer-events-none disabled:opacity-40";
+
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col bg-white">
+      <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
+          <button onClick={onDiscard} aria-label={editing ? "Delete goal" : "Discard goal"} className={iconBtn}>
+            <Trash2 size={20} />
+          </button>
+          <span className="text-base font-bold text-[#0e0f0c]">Goal!</span>
+          <button
+            onClick={() => onSave({ scorerId, assistId })}
+            disabled={!scorerId}
+            aria-label="Save goal"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f] disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Check size={20} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-6 pb-28 pt-2">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => (step === "assist" ? setStep("scorer") : onDiscard())}
+            aria-label="Back"
+            className={iconBtn}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <h1 className="text-[34px] font-bold leading-none tracking-tight text-[#0e0f0c]">
+            {title}
+          </h1>
+          <button
+            onClick={() => setStep("assist")}
+            disabled={step === "assist" || !scorerId}
+            aria-label="Next"
+            className={iconBtn}
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          {players.length === 0 ? (
+            <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
+              No players in the line-up.
+            </p>
+          ) : (
+            players.map((p) => {
+              const selected = selectedId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => pick(p.id)}
+                  className={
+                    "flex w-full items-center rounded-3xl p-4 text-left text-base font-bold text-[#0e0f0c] transition-colors " +
+                    (selected ? "bg-[#9fe870]" : "bg-[#16330014] active:bg-[#1633001f]")
+                  }
+                >
+                  {p.name}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Live({ data, setData, roster, teamName, setTab, flash }) {
-  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [liveTab, setLiveTab] = useState("match");
   const [oppSheet, setOppSheet] = useState(false);
   const [oppDraft, setOppDraft] = useState("");
-  const [warn, setWarn] = useState(null);
+  const [goalEditor, setGoalEditor] = useState(null);
   const { live } = data;
 
-  const start = () =>
-    setData((d) => ({
-      ...d,
-      live: {
-        date: today(),
-        opposition: "",
-        home: true,
-        goals: {},
-        assists: {},
-        oppGoals: 0,
-        playing: Object.fromEntries(
-          d.roster.filter((p) => p.active).map((p) => [p.id, true])
-        ),
-      },
-    }));
+  const nameOf = (id) => (roster.find((p) => p.id === id) || {}).name || "—";
+
+  useEffect(() => {
+    if (data.live) return;
+    setData((d) =>
+      d.live
+        ? d
+        : {
+            ...d,
+            live: {
+              date: today(),
+              opposition: "",
+              home: true,
+              active: false,
+              playing: Object.fromEntries(
+                d.roster.filter((p) => p.active).map((p) => [p.id, true])
+              ),
+              events: [],
+            },
+          }
+    );
+  }, []);
 
   if (!live) {
     return (
-      <div className="flex min-h-96 flex-col">
-        <StickyHeader>
-          <p className="truncate text-xs font-semibold uppercase tracking-widest text-emerald-600">
-            {teamName}
-          </p>
-          <h1 className="text-2xl font-bold tracking-tight">Live</h1>
-        </StickyHeader>
-        <div className="flex flex-1 flex-col items-center justify-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-            <Radio size={30} />
-          </div>
-          <p className="mt-4 max-w-xs text-slate-500">
-            No match in progress. Kick off to start tracking goals and assists in real time.
-          </p>
-          <button
-            onClick={start}
-            className="mt-6 rounded-full bg-[#163300] px-8 py-3.5 text-base font-bold text-white shadow-sm active:bg-black"
-          >
-            Start match
-          </button>
-        </div>
+      <div className="flex min-h-96 items-center justify-center text-sm text-[#454745]">
+        Setting up…
       </div>
     );
   }
 
-  const us = ourScore(live);
-  const s = sides(teamName, live.opposition, us, live.oppGoals, live.home);
-  const bump = (field, pid, delta) =>
-    setData((d) => ({
-      ...d,
-      live: {
-        ...d.live,
-        [field]: { ...d.live[field], [pid]: Math.max(0, (d.live[field][pid] || 0) + delta) },
-      },
-    }));
-  const setOpp = (v) => setData((d) => ({ ...d, live: { ...d.live, opposition: v } }));
-  const bumpOpp = (delta) =>
-    setData((d) => ({ ...d, live: { ...d.live, oppGoals: Math.max(0, d.live.oppGoals + delta) } }));
-  const toggleHome = () => setData((d) => ({ ...d, live: { ...d.live, home: !d.live.home } }));
+  const updLive = (fn) => setData((d) => ({ ...d, live: fn(d.live) }));
 
+  const teamEvents = live.events.filter((e) => e.type === "team");
+  const oppEvents = live.events.filter((e) => e.type === "opp");
+  const us = teamEvents.length;
+  const them = oppEvents.length;
+  const s = sides(teamName, live.opposition, us, them, live.home);
+
+  const goalsOf = (pid) => teamEvents.filter((e) => e.scorerId === pid).length;
+  const assistsOf = (pid) => teamEvents.filter((e) => e.assistId === pid).length;
+
+  const toggleHome = () => updLive((l) => ({ ...l, home: !l.home }));
   const isPlaying = (pid) => live.playing?.[pid] !== false;
-  const setPlaying = (pid, val) =>
-    setData((d) => ({ ...d, live: { ...d.live, playing: { ...d.live.playing, [pid]: val } } }));
-  const tryToggle = (p) => {
-    if (isPlaying(p.id)) {
-      if ((live.goals[p.id] || 0) > 0 || (live.assists[p.id] || 0) > 0) {
-        setWarn(p.name);
-        return;
-      }
-      setPlaying(p.id, false);
-    } else {
-      setPlaying(p.id, true);
-    }
-  };
+  const onToggle = (p) =>
+    updLive((l) => ({ ...l, playing: { ...l.playing, [p.id]: !isPlaying(p.id) } }));
 
   const openOpp = () => {
     setOppDraft(live.opposition || "");
     setOppSheet(true);
   };
   const saveOpp = () => {
-    setOpp(oppDraft.trim());
+    updLive((l) => ({ ...l, opposition: oppDraft.trim() }));
     setOppSheet(false);
   };
 
-  const players = roster.filter((p) => p.active || live.goals[p.id] || live.assists[p.id]);
+  const startGame = () => updLive((l) => ({ ...l, active: true }));
+  const addOppGoal = () =>
+    updLive((l) => ({ ...l, events: [...l.events, { id: uid(), type: "opp" }] }));
+  const deleteEvent = (id) =>
+    updLive((l) => ({ ...l, events: l.events.filter((e) => e.id !== id) }));
+  const saveGoalEvent = ({ scorerId, assistId }) => {
+    const editId = goalEditor && goalEditor.eventId;
+    updLive((l) => ({
+      ...l,
+      events: editId
+        ? l.events.map((e) => (e.id === editId ? { ...e, scorerId, assistId } : e))
+        : [...l.events, { id: uid(), type: "team", scorerId, assistId }],
+    }));
+    setGoalEditor(null);
+  };
 
-  const end = () => {
-    const record = {
-      id: uid(),
-      date: live.date,
-      opposition: live.opposition.trim(),
-      home: live.home,
-      goals: stripZeros(live.goals),
-      assists: stripZeros(live.assists),
-      oppGoals: live.oppGoals,
-      appearances: players.filter((p) => isPlaying(p.id)).map((p) => p.id),
-    };
-    setData((d) => ({ ...d, matches: [record, ...d.matches], live: null }));
-    setConfirmEnd(false);
-    flash("Match saved to your season");
-    setTab("matches");
-  };
-  const discard = () => {
-    setData((d) => ({ ...d, live: null }));
-    setConfirmEnd(false);
-    flash("Match discarded");
-  };
+  const lineUp = roster.filter((p) => p.active);
+
+  if (goalEditor) {
+    const initial = goalEditor.eventId
+      ? live.events.find((e) => e.id === goalEditor.eventId)
+      : null;
+    const pickPlayers = lineUp.filter(
+      (p) =>
+        isPlaying(p.id) ||
+        (initial && (initial.scorerId === p.id || initial.assistId === p.id))
+    );
+    return (
+      <SaveGoalScreen
+        players={pickPlayers}
+        initial={initial}
+        onSave={saveGoalEvent}
+        onDiscard={() => {
+          if (goalEditor.eventId) deleteEvent(goalEditor.eventId);
+          setGoalEditor(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
-      {/* Scoreboard */}
-      <div className="rounded-3xl bg-[#163300] p-4">
-        <div className="flex items-center justify-center gap-4">
-          <ScoreSide
-            label={live.home ? "Home" : "Away"}
-            score={s.ls}
-            ours={live.home}
-            teamName={teamName}
-            opposition={live.opposition}
-            onNameTap={openOpp}
-          />
-          <button
-            onClick={toggleHome}
-            aria-label="Swap home and away"
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#e2f6d5] text-[#163300] active:bg-[#d3efc0]"
-          >
-            <ArrowLeftRight size={20} />
-          </button>
-          <ScoreSide
-            label={live.home ? "Away" : "Home"}
-            score={s.rs}
-            ours={!live.home}
-            teamName={teamName}
-            opposition={live.opposition}
-            onNameTap={openOpp}
-          />
-        </div>
-        {/* TODO: half-time behaviour — to be wired up in a later round */}
-        <button
-          onClick={() => {}}
-          className="mt-6 h-11 w-full rounded-full bg-[#9fe870] text-base font-bold text-[#163300] active:bg-[#8fd95f]"
-        >
-          Half time
-        </button>
-      </div>
+      <Segmented tab={liveTab} setTab={setLiveTab} />
 
-      {/* Opposition goals — kept for functionality (not shown in the Figma frame) */}
-      <div className="flex items-center justify-between rounded-3xl bg-[#16330014] p-4">
-        <span className="text-base font-bold text-[#0e0f0c]">Opposition goals</span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => bumpOpp(-1)}
-            disabled={live.oppGoals <= 0}
-            aria-label="remove opposition goal"
-            className="flex size-11 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f] disabled:pointer-events-none disabled:opacity-40"
-          >
-            <Minus size={18} strokeWidth={2.5} />
-          </button>
-          <span className="w-8 text-center text-[22px] font-bold tabular-nums text-[#0e0f0c]">
-            {live.oppGoals}
-          </span>
-          <button
-            onClick={() => bumpOpp(1)}
-            aria-label="add opposition goal"
-            className="flex size-11 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
-          >
-            <Plus size={18} strokeWidth={2.5} />
-          </button>
-        </div>
-      </div>
+      {liveTab === "match" ? (
+        <>
+          <LiveScoreboard s={s} live={live} teamName={teamName} onSwap={toggleHome} onNameTap={openOpp} />
 
-      {/* Players */}
-      {players.length === 0 ? (
-        <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
-          No players yet. Add your squad from the Team tab — the match keeps running.
-        </p>
-      ) : (
-        players.map((p) => {
-          const playing = isPlaying(p.id);
-          return (
-            <div
-              key={p.id}
-              className={"rounded-3xl bg-[#16330014] p-4 " + (playing ? "" : "opacity-60")}
-            >
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1 truncate pr-3 text-base font-bold text-[#0e0f0c]">
-                  {p.name}
-                </div>
-                <button
-                  role="switch"
-                  aria-checked={playing}
-                  onClick={() => tryToggle(p)}
-                  className="flex shrink-0 items-center gap-2"
-                >
-                  <span className="text-base font-light text-[#0e0f0c]">Playing</span>
-                  <span
-                    className={
-                      "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
-                      (playing ? "bg-[#34c759]" : "bg-black/20")
-                    }
-                  >
-                    <span
-                      className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
-                      style={{ left: playing ? 22 : 2 }}
-                    />
-                  </span>
-                </button>
-              </div>
-              <div className="mt-3 flex items-start justify-between">
-                <LiveStepper
-                  label="Goal"
-                  disabled={!playing}
-                  value={live.goals[p.id] || 0}
-                  onDec={() => bump("goals", p.id, -1)}
-                  onInc={() => bump("goals", p.id, 1)}
-                />
-                <LiveStepper
-                  label="Assist"
-                  disabled={!playing}
-                  value={live.assists[p.id] || 0}
-                  onDec={() => bump("assists", p.id, -1)}
-                  onInc={() => bump("assists", p.id, 1)}
-                />
-              </div>
+          {live.active ? (
+            <div className="flex items-stretch gap-2">
+              <button
+                onClick={() => setGoalEditor({})}
+                className="flex-1 rounded-full bg-[#9fe870] py-3 text-base font-bold text-[#163300] active:bg-[#8fd95f]"
+              >
+                GOAL!
+              </button>
+              <button
+                onClick={addOppGoal}
+                className="flex-1 rounded-full bg-[#ff383c24] py-3 text-base font-bold text-[#0e0f0c] active:bg-[#ff383c33]"
+              >
+                Oppo goal
+              </button>
+              {/* TODO: match timing / half-time — to be wired up later */}
+              <button
+                onClick={() => {}}
+                aria-label="Match timing"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
+              >
+                <Stopwatch size={20} />
+              </button>
             </div>
-          );
-        })
-      )}
+          ) : (
+            <button
+              onClick={startGame}
+              className="w-full rounded-full bg-[#9fe870] py-3 text-base font-bold text-[#163300] active:bg-[#8fd95f]"
+            >
+              Start game
+            </button>
+          )}
 
-      <button
-        onClick={() => setConfirmEnd(true)}
-        className="w-full rounded-full border border-[#0e0f0c33] py-3 text-base font-bold text-[#0e0f0c] active:bg-[#16330014]"
-      >
-        Finish match
-      </button>
-
-      {confirmEnd && (
-        <Modal
-          title="Finish the match?"
-          body={`Final score ${s.l} ${s.ls} – ${s.rs} ${s.r}. Saving adds it to your season and updates the totals. Discard throws it away.`}
-          confirmLabel="Finish & save"
-          secondaryLabel="Discard match"
-          onConfirm={end}
-          onSecondary={discard}
-          onCancel={() => setConfirmEnd(false)}
+          {live.active && (
+            <GoalFeed
+              events={live.events}
+              nameOf={nameOf}
+              teamName={teamName}
+              onEdit={(e) => setGoalEditor({ eventId: e.id })}
+              onDeleteOpp={(e) => deleteEvent(e.id)}
+            />
+          )}
+        </>
+      ) : (
+        <LineUpTab
+          players={lineUp}
+          isPlaying={isPlaying}
+          onToggle={onToggle}
+          goalsOf={goalsOf}
+          assistsOf={assistsOf}
         />
       )}
 
@@ -1349,34 +1530,24 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
               onChange={(e) => setOppDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && saveOpp()}
               placeholder="e.g. Riverside FC"
-              className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+              className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#163300]"
             />
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => setOppSheet(false)}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
-              >
-                Cancel
-              </button>
+            <div className="mt-4 flex flex-col gap-2">
               <button
                 onClick={saveOpp}
-                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white active:bg-emerald-700"
+                className="w-full rounded-xl bg-[#163300] py-2.5 text-sm font-semibold text-white active:bg-black"
               >
                 Save
+              </button>
+              <button
+                onClick={() => setOppSheet(false)}
+                className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
+              >
+                Cancel
               </button>
             </div>
           </div>
         </div>
-      )}
-
-      {warn && (
-        <Modal
-          single
-          title={`${warn} can't be benched`}
-          body="They've already got a goal or assist in this match. Clear those first if they aren't playing."
-          confirmLabel="Got it"
-          onConfirm={() => setWarn(null)}
-        />
       )}
     </div>
   );
@@ -1399,35 +1570,6 @@ function ScoreSide({ label, score, ours, teamName, opposition, onNameTap }) {
           {opposition || "Add name"}
         </button>
       )}
-    </div>
-  );
-}
-
-function LiveStepper({ label, value, onDec, onInc, disabled }) {
-  const base =
-    "flex size-11 shrink-0 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-40";
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={onDec}
-        disabled={disabled || value <= 0}
-        aria-label={"decrease " + label}
-        className={base + " bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"}
-      >
-        <Minus size={18} strokeWidth={2.5} />
-      </button>
-      <div className="flex w-10 flex-col items-center leading-none">
-        <span className="text-[34px] font-bold tabular-nums text-[#0e0f0c]">{value}</span>
-        <span className="mt-0.5 text-xs font-light text-[#0e0f0c]">{label}</span>
-      </div>
-      <button
-        onClick={onInc}
-        disabled={disabled}
-        aria-label={"increase " + label}
-        className={base + " bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"}
-      >
-        <Plus size={18} strokeWidth={2.5} />
-      </button>
     </div>
   );
 }
