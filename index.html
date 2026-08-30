@@ -154,6 +154,7 @@ const sum = (obj) => Object.values(obj || {}).reduce((a, b) => a + (b || 0), 0);
 const ourScore = (m) => sum(m.goals);
 const stripZeros = (obj) =>
   Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => v > 0));
+const pad2 = (n) => String(n).padStart(2, "0");
 
 // home/away aware sides for display: l/r names, ls/rs scores
 function sides(teamName, opposition, us, them, home) {
@@ -1127,7 +1128,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           </p>
           <button
             onClick={start}
-            className="mt-6 rounded-2xl bg-emerald-600 px-8 py-3.5 text-base font-semibold text-white shadow-sm active:bg-emerald-700"
+            className="mt-6 rounded-full bg-[#163300] px-8 py-3.5 text-base font-bold text-white shadow-sm active:bg-black"
           >
             Start match
           </button>
@@ -1200,18 +1201,10 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   };
 
   return (
-    <div>
-      {/* Floodlit scoreboard */}
-      <div className="rounded-2xl bg-slate-900 p-5 text-white shadow-sm">
-        <div className="flex items-center justify-between text-xs font-medium uppercase tracking-widest text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" /> Live
-          </span>
-          <span>{fmtDate(live.date, true)}</span>
-        </div>
-
-        {/* two stacked sides: label / score / name, with a reverse swap in the middle */}
-        <div className="mt-4 flex items-center gap-2">
+    <div className="space-y-4">
+      {/* Scoreboard */}
+      <div className="rounded-3xl bg-[#163300] p-4">
+        <div className="flex items-center justify-center gap-4">
           <ScoreSide
             label={live.home ? "Home" : "Away"}
             score={s.ls}
@@ -1222,10 +1215,10 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           />
           <button
             onClick={toggleHome}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700 text-slate-100 active:bg-slate-600"
             aria-label="Swap home and away"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#e2f6d5] text-[#163300] active:bg-[#d3efc0]"
           >
-            <ArrowLeftRight size={16} />
+            <ArrowLeftRight size={20} />
           </button>
           <ScoreSide
             label={live.home ? "Away" : "Home"}
@@ -1236,111 +1229,101 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
             onNameTap={openOpp}
           />
         </div>
+        {/* TODO: half-time behaviour — to be wired up in a later round */}
+        <button
+          onClick={() => {}}
+          className="mt-6 h-11 w-full rounded-full bg-[#9fe870] text-base font-bold text-[#163300] active:bg-[#8fd95f]"
+        >
+          Half time
+        </button>
       </div>
 
-      {/* Opposition goals: just + / − (total shows on the scoreboard) */}
-      <div className="mt-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
-        <span className="font-semibold">Opposition goals</span>
+      {/* Opposition goals — kept for functionality (not shown in the Figma frame) */}
+      <div className="flex items-center justify-between rounded-3xl bg-[#16330014] p-4">
+        <span className="text-base font-bold text-[#0e0f0c]">Opposition goals</span>
         <div className="flex items-center gap-2">
           <button
             onClick={() => bumpOpp(-1)}
             disabled={live.oppGoals <= 0}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 active:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none"
             aria-label="remove opposition goal"
+            className="flex size-11 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f] disabled:pointer-events-none disabled:opacity-40"
           >
             <Minus size={18} strokeWidth={2.5} />
           </button>
+          <span className="w-8 text-center text-[22px] font-bold tabular-nums text-[#0e0f0c]">
+            {live.oppGoals}
+          </span>
           <button
             onClick={() => bumpOpp(1)}
-            className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800 text-white active:bg-slate-900"
             aria-label="add opposition goal"
+            className="flex size-11 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
           >
             <Plus size={18} strokeWidth={2.5} />
           </button>
         </div>
       </div>
 
-      {/* Our players */}
-      <h2 className="mb-2 mt-5 px-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
-        Our players
-      </h2>
+      {/* Players */}
       {players.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400">
-          No players yet. Add your squad from the Top Scorers tab, then come back — the match keeps
-          running.
+        <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
+          No players yet. Add your squad from the Team tab — the match keeps running.
         </p>
       ) : (
-        <div className="space-y-2.5">
-          {players.map((p) => {
-            const playing = isPlaying(p.id);
-            return (
-              <div
-                key={p.id}
-                className={
-                  "rounded-2xl border px-4 py-3 " +
-                  (playing ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50")
-                }
-              >
-                <div className="flex items-center justify-between">
-                  <div className={"font-semibold " + (playing ? "" : "text-slate-400")}>
-                    {p.name}
-                  </div>
-                  <button
-                    role="switch"
-                    aria-checked={playing}
-                    onClick={() => tryToggle(p)}
-                    className="flex items-center gap-2"
+        players.map((p) => {
+          const playing = isPlaying(p.id);
+          return (
+            <div
+              key={p.id}
+              className={"rounded-3xl bg-[#16330014] p-4 " + (playing ? "" : "opacity-60")}
+            >
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1 truncate pr-3 text-base font-bold text-[#0e0f0c]">
+                  {p.name}
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={playing}
+                  onClick={() => tryToggle(p)}
+                  className="flex shrink-0 items-center gap-2"
+                >
+                  <span className="text-base font-light text-[#0e0f0c]">Playing</span>
+                  <span
+                    className={
+                      "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
+                      (playing ? "bg-[#34c759]" : "bg-black/20")
+                    }
                   >
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                      Playing
-                    </span>
                     <span
-                      className={
-                        "relative h-6 w-11 rounded-full transition-colors " +
-                        (playing ? "bg-emerald-500" : "bg-slate-300")
-                      }
-                    >
-                      <span
-                        className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
-                        style={{ left: playing ? 22 : 2 }}
-                      />
-                    </span>
-                  </button>
-                </div>
-                <div className="mt-2.5 flex items-center gap-5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-9 text-xs font-semibold uppercase tracking-wider text-emerald-600">
-                      Goal
-                    </span>
-                    <Stepper
-                      tone="goal"
-                      disabled={!playing}
-                      value={live.goals[p.id] || 0}
-                      onDec={() => bump("goals", p.id, -1)}
-                      onInc={() => bump("goals", p.id, 1)}
+                      className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
+                      style={{ left: playing ? 22 : 2 }}
                     />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-11 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Assist
-                    </span>
-                    <Stepper
-                      disabled={!playing}
-                      value={live.assists[p.id] || 0}
-                      onDec={() => bump("assists", p.id, -1)}
-                      onInc={() => bump("assists", p.id, 1)}
-                    />
-                  </div>
-                </div>
+                  </span>
+                </button>
               </div>
-            );
-          })}
-        </div>
+              <div className="mt-3 flex items-start justify-between">
+                <LiveStepper
+                  label="Goal"
+                  disabled={!playing}
+                  value={live.goals[p.id] || 0}
+                  onDec={() => bump("goals", p.id, -1)}
+                  onInc={() => bump("goals", p.id, 1)}
+                />
+                <LiveStepper
+                  label="Assist"
+                  disabled={!playing}
+                  value={live.assists[p.id] || 0}
+                  onDec={() => bump("assists", p.id, -1)}
+                  onInc={() => bump("assists", p.id, 1)}
+                />
+              </div>
+            </div>
+          );
+        })
       )}
 
       <button
         onClick={() => setConfirmEnd(true)}
-        className="mt-6 w-full rounded-2xl border border-slate-300 bg-white py-3.5 font-semibold text-slate-800 active:bg-slate-100"
+        className="w-full rounded-full border border-[#0e0f0c33] py-3 text-base font-bold text-[#0e0f0c] active:bg-[#16330014]"
       >
         Finish match
       </button>
@@ -1402,26 +1385,50 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
 
 function ScoreSide({ label, score, ours, teamName, opposition, onNameTap }) {
   return (
-    <div className="min-w-0 flex-1 text-center">
-      <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</div>
-      <div className="my-1 text-5xl font-bold tabular-nums">{score}</div>
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
+      <div className="text-base font-light text-white">{label}</div>
+      <div className="text-[34px] font-bold leading-none tabular-nums text-white">{score}</div>
       {ours ? (
-        <div className="px-1 text-sm font-semibold leading-tight text-white">{teamName}</div>
-      ) : opposition ? (
-        <button
-          onClick={onNameTap}
-          className="mx-auto block max-w-full truncate rounded-lg px-2 py-0.5 text-sm font-semibold leading-tight text-white active:bg-slate-800"
-        >
-          {opposition}
-        </button>
+        <div className="max-w-full truncate px-2 py-1 text-base font-bold text-white">
+          {teamName.trim() || "Team"}
+        </div>
       ) : (
         <button
           onClick={onNameTap}
-          className="mx-auto inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-emerald-300 active:bg-slate-700"
+          className="max-w-full truncate rounded-full bg-[#e2f6d5] px-3 py-1 text-base font-bold text-[#163300] active:bg-[#d3efc0]"
         >
-          <Plus size={13} strokeWidth={2.5} /> Add name
+          {opposition || "Add name"}
         </button>
       )}
+    </div>
+  );
+}
+
+function LiveStepper({ label, value, onDec, onInc, disabled }) {
+  const base =
+    "flex size-11 shrink-0 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-40";
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={onDec}
+        disabled={disabled || value <= 0}
+        aria-label={"decrease " + label}
+        className={base + " bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"}
+      >
+        <Minus size={18} strokeWidth={2.5} />
+      </button>
+      <div className="flex w-10 flex-col items-center leading-none">
+        <span className="text-[34px] font-bold tabular-nums text-[#0e0f0c]">{pad2(value)}</span>
+        <span className="mt-0.5 text-xs font-light text-[#0e0f0c]">{label}</span>
+      </div>
+      <button
+        onClick={onInc}
+        disabled={disabled}
+        aria-label={"increase " + label}
+        className={base + " bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"}
+      >
+        <Plus size={18} strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
