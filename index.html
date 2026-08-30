@@ -154,7 +154,6 @@ const sum = (obj) => Object.values(obj || {}).reduce((a, b) => a + (b || 0), 0);
 const ourScore = (m) => sum(m.goals);
 const stripZeros = (obj) =>
   Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => v > 0));
-const pad2 = (n) => String(n).padStart(2, "0");
 
 // home/away aware sides for display: l/r names, ls/rs scores
 function sides(teamName, opposition, us, them, home) {
@@ -1418,7 +1417,7 @@ function LiveStepper({ label, value, onDec, onInc, disabled }) {
         <Minus size={18} strokeWidth={2.5} />
       </button>
       <div className="flex w-10 flex-col items-center leading-none">
-        <span className="text-[34px] font-bold tabular-nums text-[#0e0f0c]">{pad2(value)}</span>
+        <span className="text-[34px] font-bold tabular-nums text-[#0e0f0c]">{value}</span>
         <span className="mt-0.5 text-xs font-light text-[#0e0f0c]">{label}</span>
       </div>
       <button
