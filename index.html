@@ -23,16 +23,22 @@
       -webkit-tap-highlight-color: transparent;
       font-family: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", system-ui, -apple-system, "Segoe UI", sans-serif;
     }
-    /* Chrome sizes native date inputs from their content and can overflow the
-       column; pin them to their container. */
+    /* iOS Safari (and some Chrome builds) render native date inputs at an
+       intrinsic size that ignores width and overflows the column. Strip the
+       native appearance so our own box constraints apply; the native picker
+       still opens on tap. */
     input[type="date"] {
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
       box-sizing: border-box;
       display: block;
       width: 100%;
       min-width: 0;
       max-width: 100%;
+      background-color: #fff;
     }
-    input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+    input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     input[type="date"]::-webkit-calendar-picker-indicator { margin-left: 0; flex-shrink: 0; }
   </style>
 </head>
@@ -1709,7 +1715,7 @@ function MatchSetupForm({
           type="date"
           value={date}
           onChange={(e) => onDate(e.target.value)}
-          className="block h-11 w-full min-w-0 max-w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
+          className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-lg border border-[#0e0f0c33] bg-white px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
         />
       </div>
 
