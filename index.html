@@ -1436,6 +1436,7 @@ function LiveScore({ live, teamName, us, them, onSwap, onNameTap, onOurGoal, onO
 }
 
 function LineUpTab({ players, isPlaying, onToggle, goalsOf, assistsOf, locked }) {
+  const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
   if (players.length === 0)
     return (
       <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
@@ -1444,7 +1445,7 @@ function LineUpTab({ players, isPlaying, onToggle, goalsOf, assistsOf, locked })
     );
   return (
     <div className="space-y-4">
-      {players.map((p) => {
+      {sorted.map((p) => {
         const playing = isPlaying(p.id);
         return (
           <div
@@ -1581,6 +1582,7 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
 
   const title = step === "scorer" ? "Goalscorer" : "Assist";
   const selectedId = step === "scorer" ? scorerId : assistId;
+  const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
   const pick = (pid) => {
     if (step === "scorer") setScorerId((c) => (c === pid ? null : pid));
     else setAssistId((c) => (c === pid ? null : pid));
@@ -1639,7 +1641,7 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
               No players in the line-up.
             </p>
           ) : (
-            players.map((p) => {
+            sorted.map((p) => {
               const selected = selectedId === p.id;
               return (
                 <button
