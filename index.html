@@ -98,6 +98,7 @@ const X = (p) => <Svg {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" 
 const ChevronLeft = (p) => <Svg {...p}><path d="m15 18-6-6 6-6" /></Svg>;
 const ChevronRight = (p) => <Svg {...p}><path d="m9 18 6-6-6-6" /></Svg>;
 const Stopwatch = (p) => <Svg {...p}><line x1="10" y1="2" x2="14" y2="2" /><line x1="12" y1="14" x2="15" y2="11" /><circle cx="12" cy="14" r="8" /></Svg>;
+const ArrowUpDown = (p) => <Svg {...p}><path d="m21 16-4 4-4-4" /><path d="M17 20V4" /><path d="m3 8 4-4 4 4" /><path d="M7 4v16" /></Svg>;
 const Trash2 = (p) => <Svg {...p}><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></Svg>;
 const Pencil = (p) => <Svg {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></Svg>;
 const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></Svg>;
@@ -1133,34 +1134,68 @@ function Segmented({ tab, setTab }) {
   );
 }
 
-function LiveScoreboard({ s, live, teamName, onSwap, onNameTap }) {
+function LiveScoreCard({ label, ours, score, teamName, opposition, onNameTap, onPlus, plusDisabled }) {
   return (
-    <div className="rounded-3xl bg-[#163300] p-4">
-      <div className="flex items-center justify-center gap-4">
-        <ScoreSide
-          label={live.home ? "Home" : "Away"}
-          score={s.ls}
-          ours={live.home}
-          teamName={teamName}
-          opposition={live.opposition}
-          onNameTap={onNameTap}
-        />
-        <button
-          onClick={onSwap}
-          aria-label="Swap home and away"
-          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#e2f6d5] text-[#163300] active:bg-[#d3efc0]"
-        >
-          <ArrowLeftRight size={20} />
-        </button>
-        <ScoreSide
-          label={live.home ? "Away" : "Home"}
-          score={s.rs}
-          ours={!live.home}
-          teamName={teamName}
-          opposition={live.opposition}
-          onNameTap={onNameTap}
-        />
+    <div className="flex h-[88px] items-center gap-4 rounded-3xl bg-[#163300] p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <span className="text-base font-light text-white">{label}</span>
+        {ours ? (
+          <span className="truncate text-base font-bold text-white">{teamName.trim() || "Team"}</span>
+        ) : (
+          <button
+            onClick={onNameTap}
+            className="max-w-full self-start truncate rounded-full bg-[#e2f6d5] px-4 py-1 text-base font-bold text-[#163300] active:bg-[#d3efc0]"
+          >
+            {opposition || "Add name"}
+          </button>
+        )}
       </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="text-[42px] font-bold leading-none tabular-nums text-white">{score}</span>
+        <button
+          onClick={onPlus}
+          disabled={plusDisabled}
+          aria-label={ours ? "Add our goal" : "Add opposition goal"}
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f] disabled:pointer-events-none disabled:opacity-40"
+        >
+          <Plus size={20} strokeWidth={2.5} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LiveScore({ live, teamName, us, them, onSwap, onNameTap, onOurGoal, onOppGoal }) {
+  const topOurs = live.home;
+  return (
+    <div className="relative flex flex-col gap-2">
+      <LiveScoreCard
+        label="Home"
+        ours={topOurs}
+        score={topOurs ? us : them}
+        teamName={teamName}
+        opposition={live.opposition}
+        onNameTap={onNameTap}
+        onPlus={topOurs ? onOurGoal : onOppGoal}
+        plusDisabled={!live.active}
+      />
+      <LiveScoreCard
+        label="Away"
+        ours={!topOurs}
+        score={!topOurs ? us : them}
+        teamName={teamName}
+        opposition={live.opposition}
+        onNameTap={onNameTap}
+        onPlus={!topOurs ? onOurGoal : onOppGoal}
+        plusDisabled={!live.active}
+      />
+      <button
+        onClick={onSwap}
+        aria-label="Swap home and away"
+        className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#e2f6d5] text-[#163300] shadow-md active:bg-[#d3efc0]"
+      >
+        <ArrowUpDown size={18} />
+      </button>
     </div>
   );
 }
@@ -1222,53 +1257,69 @@ function LineUpTab({ players, isPlaying, onToggle, goalsOf, assistsOf }) {
   );
 }
 
-function GoalFeed({ events, nameOf, teamName, onEdit, onDeleteOpp }) {
+function GoalFeed({ events, nameOf, teamName, home, onEdit, onDelete }) {
   if (events.length === 0) return null;
+  const pill =
+    "shrink-0 rounded-full bg-[#16330014] px-4 py-1 text-base font-bold text-[#454745] active:bg-[#1633001f]";
   return (
     <div className="space-y-3">
       <p className="text-base font-bold text-[#0e0f0c]">Goal feed</p>
-      {[...events].reverse().map((e) =>
-        e.type === "team" ? (
-          <div key={e.id} className="flex items-start gap-2 rounded-3xl bg-[#e2f6d5] p-4">
-            <div className="min-w-0 flex-1">
-              <div className="text-base">
-                <span className="font-bold text-[#0e0f0c]">GOAL! </span>
-                <span className="font-light text-[#0e0f0c]">{teamName.trim() || "Team"}</span>
-              </div>
-              <div className="mt-1 flex flex-wrap gap-x-3 text-base">
-                <span>
-                  <span className="font-bold text-[#0e0f0c]">G: </span>
-                  <span className="font-light text-[#0e0f0c]">{nameOf(e.scorerId)}</span>
-                </span>
-                {e.assistId && (
-                  <span>
-                    <span className="font-bold text-[#0e0f0c]">A: </span>
-                    <span className="font-light text-[#0e0f0c]">{nameOf(e.assistId)}</span>
-                  </span>
+      {[...events].reverse().map((e) => {
+        if (e.type === "team")
+          return (
+            <div key={e.id} className="flex items-start gap-2 rounded-3xl bg-[#e2f6d5] p-4">
+              <div className="min-w-0 flex-1">
+                <div className="text-base">
+                  <span className="font-bold text-[#0e0f0c]">GOAL! </span>
+                  <span className="font-light text-[#0e0f0c]">{teamName.trim() || "Team"}</span>
+                </div>
+                {(e.scorerId || e.assistId) && (
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-base">
+                    {e.scorerId && (
+                      <span>
+                        <span className="font-bold text-[#0e0f0c]">G: </span>
+                        <span className="font-light text-[#0e0f0c]">{nameOf(e.scorerId)}</span>
+                      </span>
+                    )}
+                    {e.assistId && (
+                      <span>
+                        <span className="font-bold text-[#0e0f0c]">A: </span>
+                        <span className="font-light text-[#0e0f0c]">{nameOf(e.assistId)}</span>
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
+              <button onClick={() => onEdit(e)} className={pill}>
+                Edit
+              </button>
             </div>
-            <button
-              onClick={() => onEdit(e)}
-              className="shrink-0 rounded-full bg-[#16330014] px-4 py-1 text-base font-bold text-[#454745] active:bg-[#1633001f]"
-            >
-              Edit
-            </button>
-          </div>
-        ) : (
+          );
+        if (e.type === "halftime") {
+          const homeScore = home ? e.us : e.them;
+          const awayScore = home ? e.them : e.us;
+          return (
+            <div key={e.id} className="flex items-center gap-2 rounded-3xl bg-[#16330014] p-4">
+              <span className="min-w-0 flex-1 text-base font-bold text-[#0e0f0c]">
+                Half-time · {homeScore}–{awayScore}
+              </span>
+              <button onClick={() => onDelete(e)} className={pill}>
+                Delete
+              </button>
+            </div>
+          );
+        }
+        return (
           <div key={e.id} className="flex items-center gap-2 rounded-3xl bg-[#ff383c24] p-4">
             <span className="min-w-0 flex-1 text-base font-bold text-[#0e0f0c]">
               Opposition goal
             </span>
-            <button
-              onClick={() => onDeleteOpp(e)}
-              className="shrink-0 rounded-full bg-[#16330014] px-4 py-1 text-base font-bold text-[#454745] active:bg-[#1633001f]"
-            >
+            <button onClick={() => onDelete(e)} className={pill}>
               Delete
             </button>
           </div>
-        )
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -1277,6 +1328,7 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
   const [step, setStep] = useState("scorer");
   const [scorerId, setScorerId] = useState(initial ? initial.scorerId : null);
   const [assistId, setAssistId] = useState(initial ? initial.assistId : null);
+  const [confirmTrash, setConfirmTrash] = useState(false);
   const editing = !!initial;
 
   const title = step === "scorer" ? "Goalscorer" : "Assist";
@@ -1292,15 +1344,18 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
-          <button onClick={onDiscard} aria-label={editing ? "Delete goal" : "Discard goal"} className={iconBtn}>
+          <button
+            onClick={() => setConfirmTrash(true)}
+            aria-label={editing ? "Delete goal" : "Discard goal"}
+            className={iconBtn}
+          >
             <Trash2 size={20} />
           </button>
           <span className="text-base font-bold text-[#0e0f0c]">Goal!</span>
           <button
             onClick={() => onSave({ scorerId, assistId })}
-            disabled={!scorerId}
             aria-label="Save goal"
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f] disabled:pointer-events-none disabled:opacity-40"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
           >
             <Check size={20} strokeWidth={2.5} />
           </button>
@@ -1310,8 +1365,9 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
       <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-6 pb-28 pt-2">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => (step === "assist" ? setStep("scorer") : onDiscard())}
-            aria-label="Back"
+            onClick={() => setStep("scorer")}
+            disabled={step === "scorer"}
+            aria-label="Goalscorer"
             className={iconBtn}
           >
             <ChevronLeft size={20} />
@@ -1321,8 +1377,8 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
           </h1>
           <button
             onClick={() => setStep("assist")}
-            disabled={step === "assist" || !scorerId}
-            aria-label="Next"
+            disabled={step === "assist"}
+            aria-label="Assist"
             className={iconBtn}
           >
             <ChevronRight size={20} />
@@ -1353,6 +1409,24 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
           )}
         </div>
       </div>
+
+      {confirmTrash && (
+        <Modal
+          title={editing ? "Delete this goal?" : "Discard this goal?"}
+          body={
+            editing
+              ? "It's removed from the feed and the score. This can't be undone."
+              : "You'll lose the goalscorer and assist you've picked."
+          }
+          confirmLabel={editing ? "Delete" : "Discard"}
+          danger
+          onCancel={() => setConfirmTrash(false)}
+          onConfirm={() => {
+            setConfirmTrash(false);
+            onDiscard();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1362,6 +1436,8 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const [oppSheet, setOppSheet] = useState(false);
   const [oppDraft, setOppDraft] = useState("");
   const [goalEditor, setGoalEditor] = useState(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const { live } = data;
 
   const nameOf = (id) => (roster.find((p) => p.id === id) || {}).name || "—";
@@ -1420,9 +1496,17 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     setOppSheet(false);
   };
 
+  const halftimeMarker = live.events.find((e) => e.type === "halftime");
+
   const startGame = () => updLive((l) => ({ ...l, active: true }));
+  const addOurGoal = () => setGoalEditor({});
   const addOppGoal = () =>
     updLive((l) => ({ ...l, events: [...l.events, { id: uid(), type: "opp" }] }));
+  const addHalftime = () =>
+    updLive((l) => ({
+      ...l,
+      events: [...l.events, { id: uid(), type: "halftime", us, them }],
+    }));
   const deleteEvent = (id) =>
     updLive((l) => ({ ...l, events: l.events.filter((e) => e.id !== id) }));
   const saveGoalEvent = ({ scorerId, assistId }) => {
@@ -1437,6 +1521,43 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   };
 
   const lineUp = roster.filter((p) => p.active);
+  const appeared = (pid) =>
+    isPlaying(pid) || teamEvents.some((e) => e.scorerId === pid || e.assistId === pid);
+
+  const end = () => {
+    const goals = {};
+    const assists = {};
+    teamEvents.forEach((e) => {
+      if (e.scorerId) goals[e.scorerId] = (goals[e.scorerId] || 0) + 1;
+      if (e.assistId) assists[e.assistId] = (assists[e.assistId] || 0) + 1;
+    });
+    const record = {
+      id: uid(),
+      date: live.date,
+      opposition: live.opposition.trim(),
+      home: live.home,
+      goals,
+      assists,
+      oppGoals: them,
+      appearances: lineUp.filter((p) => appeared(p.id)).map((p) => p.id),
+      events: live.events,
+    };
+    setData((d) => ({ ...d, matches: [record, ...d.matches], live: null }));
+    setConfirmEnd(false);
+    flash("Match saved to your season");
+    setTab("matches");
+  };
+  const discard = () => {
+    setData((d) => ({ ...d, live: null }));
+    setConfirmEnd(false);
+    flash("Match discarded");
+  };
+
+  const matchBtn = !live.active
+    ? { label: "Start game", onClick: startGame }
+    : halftimeMarker
+    ? { label: "Full-time", onClick: () => setConfirmEnd(true) }
+    : { label: "Half-time", onClick: addHalftime };
 
   if (goalEditor) {
     const initial = goalEditor.eventId
@@ -1466,47 +1587,32 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
 
       {liveTab === "match" ? (
         <>
-          <LiveScoreboard s={s} live={live} teamName={teamName} onSwap={toggleHome} onNameTap={openOpp} />
+          <LiveScore
+            live={live}
+            teamName={teamName}
+            us={us}
+            them={them}
+            onSwap={toggleHome}
+            onNameTap={openOpp}
+            onOurGoal={addOurGoal}
+            onOppGoal={addOppGoal}
+          />
 
-          {live.active ? (
-            <div className="flex items-stretch gap-2">
-              <button
-                onClick={() => setGoalEditor({})}
-                className="flex-1 rounded-full bg-[#9fe870] py-3 text-base font-bold text-[#163300] active:bg-[#8fd95f]"
-              >
-                GOAL!
-              </button>
-              <button
-                onClick={addOppGoal}
-                className="flex-1 rounded-full bg-[#ff383c24] py-3 text-base font-bold text-[#0e0f0c] active:bg-[#ff383c33]"
-              >
-                Oppo goal
-              </button>
-              {/* TODO: match timing / half-time — to be wired up later */}
-              <button
-                onClick={() => {}}
-                aria-label="Match timing"
-                className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
-              >
-                <Stopwatch size={20} />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={startGame}
-              className="w-full rounded-full bg-[#9fe870] py-3 text-base font-bold text-[#163300] active:bg-[#8fd95f]"
-            >
-              Start game
-            </button>
-          )}
+          <button
+            onClick={matchBtn.onClick}
+            className="w-full rounded-full bg-[#16330014] py-3 text-base font-bold text-[#454745] active:bg-[#1633001f]"
+          >
+            {matchBtn.label}
+          </button>
 
           {live.active && (
             <GoalFeed
               events={live.events}
               nameOf={nameOf}
               teamName={teamName}
+              home={live.home}
               onEdit={(e) => setGoalEditor({ eventId: e.id })}
-              onDeleteOpp={(e) => deleteEvent(e.id)}
+              onDelete={(e) => setConfirmDelete(e)}
             />
           )}
         </>
@@ -1517,6 +1623,40 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           onToggle={onToggle}
           goalsOf={goalsOf}
           assistsOf={assistsOf}
+        />
+      )}
+
+      {confirmEnd && (
+        <Modal
+          title="Full-time — save this match?"
+          body={`Final score ${s.l} ${s.ls} – ${s.rs} ${s.r}. Saving adds it to your season and updates the totals. Discard throws it away.`}
+          confirmLabel="Save to season"
+          secondaryLabel="Discard match"
+          onConfirm={end}
+          onSecondary={discard}
+          onCancel={() => setConfirmEnd(false)}
+        />
+      )}
+
+      {confirmDelete && (
+        <Modal
+          title={
+            confirmDelete.type === "halftime"
+              ? "Remove the half-time marker?"
+              : "Remove this opposition goal?"
+          }
+          body={
+            confirmDelete.type === "halftime"
+              ? "The half-time button goes back to Half-time."
+              : "It comes off the away score. This can't be undone."
+          }
+          confirmLabel="Remove"
+          danger
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            deleteEvent(confirmDelete.id);
+            setConfirmDelete(null);
+          }}
         />
       )}
 
