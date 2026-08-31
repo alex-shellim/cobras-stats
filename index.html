@@ -585,16 +585,53 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
   const [name, setName] = useState("");
   const [remove, setRemove] = useState(null);
   const [deleteTeam, setDeleteTeam] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
+  const baseRef = useRef(null);
   const squad = roster.filter((p) => p.active);
+  const draftSquad = draft ? draft.roster.filter((p) => p.active) : [];
+
+  const openManage = () => {
+    const d = {
+      teamName,
+      clubName,
+      roster: roster.map((p) => ({ ...p })),
+    };
+    baseRef.current = JSON.stringify(d);
+    setDraft(d);
+    setName("");
+    setManage(true);
+  };
+  const dirty = () => draft && JSON.stringify(draft) !== baseRef.current;
+  const exitManage = () => {
+    setDraft(null);
+    setManage(false);
+    setConfirmClose(false);
+    setConfirmSave(false);
+    setName("");
+  };
+  const commit = () => {
+    setData((d) => ({
+      ...d,
+      teamName: draft.teamName,
+      clubName: draft.clubName,
+      roster: draft.roster,
+    }));
+    exitManage();
+    flash("Changes saved");
+  };
+  const tryClose = () => (dirty() ? setConfirmClose(true) : exitManage());
+  const trySave = () => (dirty() ? setConfirmSave(true) : exitManage());
 
   const addPlayer = () => {
     const n = name.trim();
     if (!n) return;
-    setData((d) => ({ ...d, roster: [...d.roster, { id: uid(), name: n, active: true }] }));
+    setDraft((d) => ({ ...d, roster: [...d.roster, { id: uid(), name: n, active: true }] }));
     setName("");
   };
   const rename = (id, value) =>
-    setData((d) => ({
+    setDraft((d) => ({
       ...d,
       roster: d.roster.map((p) => (p.id === id ? { ...p, name: value } : p)),
     }));
@@ -607,7 +644,7 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
             Team
           </h1>
           <button
-            onClick={() => setManage(true)}
+            onClick={openManage}
             aria-label="Edit team"
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]"
           >
@@ -617,11 +654,11 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
       </StickyHeader>
 
       {manage ? (
-        <div className="fixed inset-0 z-40 flex flex-col bg-white">
-          <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
+        <div className="fixed inset-0 z-40 flex flex-col bg-[#eef1ea]">
+          <div className="border-b border-black/[0.06] bg-[#eef1ea]/70 backdrop-blur-xl">
             <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
               <button
-                onClick={() => setManage(false)}
+                onClick={tryClose}
                 aria-label="Close"
                 className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
               >
@@ -629,7 +666,7 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
               </button>
               <span className="text-base font-bold text-[#0e0f0c]">Edit team</span>
               <button
-                onClick={() => setManage(false)}
+                onClick={trySave}
                 aria-label="Done"
                 className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
               >
@@ -643,19 +680,17 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
               <div className="flex flex-col gap-2">
                 <label className="text-base font-bold text-black">Team name</label>
                 <input
-                  value={teamName}
-                  onChange={(e) => setData((d) => ({ ...d, teamName: e.target.value }))}
+                  value={draft ? draft.teamName : ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, teamName: e.target.value }))}
                   className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
                 />
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-base font-bold text-black">
-                  Club <span className="font-normal text-[#454745]">(optional)</span>
-                </label>
+                <label className="text-base font-bold text-black">Club (optional)</label>
                 <input
-                  value={clubName}
-                  onChange={(e) => setData((d) => ({ ...d, clubName: e.target.value }))}
+                  value={draft ? draft.clubName : ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, clubName: e.target.value }))}
                   placeholder="e.g. Harpenden Colts"
                   className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none placeholder:text-[#0e0f0c66] focus:border-[#0e0f0c]"
                 />
@@ -663,10 +698,10 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
 
               <div className="flex flex-col gap-4">
                 <label className="text-base font-bold text-black">Players</label>
-                {squad.length === 0 ? (
+                {draftSquad.length === 0 ? (
                   <p className="text-sm text-[#454745]">No players yet. Add one below.</p>
                 ) : (
-                  squad.map((p) => (
+                  draftSquad.map((p) => (
                     <div key={p.id} className="flex items-center gap-2">
                       <input
                         value={p.name}
@@ -756,28 +791,39 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
       {remove && (
         <Modal
           title={`Remove ${remove.name}?`}
-          body="They'll be taken off the squad list. Their goals and assists in past matches stay recorded."
+          body="They'll be taken off the squad list. Their goals and assists in past matches stay recorded. Nothing is saved until you tap the tick."
           confirmLabel="Remove"
           danger
           onCancel={() => setRemove(null)}
           onConfirm={() => {
             const removed = remove;
-            setData((d) => ({
+            setDraft((d) => ({
               ...d,
               roster: d.roster.map((r) => (r.id === removed.id ? { ...r, active: false } : r)),
             }));
             setRemove(null);
-            flash(`${removed.name} removed`, {
-              label: "Undo",
-              onClick: () =>
-                setData((d) => ({
-                  ...d,
-                  roster: d.roster.map((r) =>
-                    r.id === removed.id ? { ...r, active: true } : r
-                  ),
-                })),
-            });
           }}
+        />
+      )}
+
+      {confirmClose && (
+        <Modal
+          title="Discard changes?"
+          body="Your changes to the team won't be saved."
+          confirmLabel="Discard"
+          danger
+          onCancel={() => setConfirmClose(false)}
+          onConfirm={exitManage}
+        />
+      )}
+
+      {confirmSave && (
+        <Modal
+          title="Save changes?"
+          body="This updates your team name, club and squad for everyone."
+          confirmLabel="Save"
+          onCancel={() => setConfirmSave(false)}
+          onConfirm={commit}
         />
       )}
 
@@ -787,6 +833,7 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
           onConfirm={() => {
             setData(() => ({ teamName: "", clubName: "", roster: [], matches: [], live: null }));
             setDeleteTeam(false);
+            setDraft(null);
             setManage(false);
             flash("Team deleted — add a new team to start");
           }}
