@@ -1144,6 +1144,22 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
         )}
       </div>
 
+      <div className="mb-4">
+        {editable ? (
+          <div className="flex flex-col gap-2">
+            <label className="text-base font-bold text-black">Match date</label>
+            <input
+              type="date"
+              value={view.date}
+              onChange={(e) => updDraft((d) => ({ ...d, date: e.target.value }))}
+              className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
+            />
+          </div>
+        ) : (
+          <p className="text-base font-medium text-[#454745]">{fmtDate(view.date, true)}</p>
+        )}
+      </div>
+
       {tab === "match" ? (
         <div className="space-y-4">
           <GoalFeed
@@ -1809,7 +1825,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   };
 
   const matchBtn = !live.active
-    ? { label: "Start game", onClick: startGame }
+    ? { label: "Start match", onClick: startGame }
     : halftimeMarker
     ? { label: "Full-time", onClick: () => setConfirmEnd(true) }
     : { label: "Half-time", onClick: addHalftime };
