@@ -1137,10 +1137,12 @@ function Segmented({ tab, setTab }) {
 function LiveScoreCard({ label, ours, score, teamName, opposition, onNameTap, onPlus, plusDisabled }) {
   return (
     <div className="flex h-[88px] items-center gap-4 rounded-3xl bg-[#163300] p-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-base font-light text-white">{label}</span>
         {ours ? (
-          <span className="truncate text-base font-bold text-white">{teamName.trim() || "Team"}</span>
+          <span className="truncate text-2xl font-bold leading-none text-white">
+            {teamName.trim() || "Team"}
+          </span>
         ) : (
           <button
             onClick={onNameTap}
@@ -1189,13 +1191,15 @@ function LiveScore({ live, teamName, us, them, onSwap, onNameTap, onOurGoal, onO
         onPlus={!topOurs ? onOurGoal : onOppGoal}
         plusDisabled={!live.active}
       />
-      <button
-        onClick={onSwap}
-        aria-label="Swap home and away"
-        className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#e2f6d5] text-[#163300] shadow-md active:bg-[#d3efc0]"
-      >
-        <ArrowUpDown size={18} />
-      </button>
+      {!live.active && (
+        <button
+          onClick={onSwap}
+          aria-label="Swap home and away"
+          className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#e2f6d5] text-[#163300] shadow-md active:bg-[#d3efc0]"
+        >
+          <ArrowUpDown size={18} />
+        </button>
+      )}
     </div>
   );
 }
@@ -1498,7 +1502,12 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
 
   const halftimeMarker = live.events.find((e) => e.type === "halftime");
 
-  const startGame = () => updLive((l) => ({ ...l, active: true }));
+  const startGame = () =>
+    updLive((l) => ({
+      ...l,
+      active: true,
+      opposition: l.opposition.trim() || "Opposition",
+    }));
   const addOurGoal = () => setGoalEditor({});
   const addOppGoal = () =>
     updLive((l) => ({ ...l, events: [...l.events, { id: uid(), type: "opp" }] }));
