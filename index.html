@@ -952,8 +952,6 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
   const [confirmSave, setConfirmSave] = useState(false);
   const [confirmDelEvt, setConfirmDelEvt] = useState(null);
   const [confirmDelMatch, setConfirmDelMatch] = useState(false);
-  const [oppSheet, setOppSheet] = useState(false);
-  const [oppDraft, setOppDraft] = useState("");
 
   const viewEvents = useMemo(() => matchToEvents(match), [match]);
   const editable = mode === "edit";
@@ -978,6 +976,12 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       teamEv.some((e) => e.scorerId === p.id || e.assistId === p.id)
   );
   const isPlaying = (pid) => view.appearances.includes(pid);
+  const sortedLineUp = [...lineUp].sort((a, b) => a.name.localeCompare(b.name));
+  const scoredIds = new Set();
+  teamEv.forEach((e) => {
+    if (e.scorerId) scoredIds.add(e.scorerId);
+    if (e.assistId) scoredIds.add(e.assistId);
+  });
 
   const startEdit = () => {
     const d = {
@@ -1030,7 +1034,6 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
   const trySave = () => (dirty() ? setConfirmSave(true) : exitEdit());
 
   const updDraft = (fn) => setDraft((d) => fn(d));
-  const toggleHome = () => updDraft((d) => ({ ...d, home: !d.home }));
   const onToggle = (p) =>
     updDraft((d) => ({
       ...d,
@@ -1052,15 +1055,6 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
     }));
     setGoalEditor(null);
   };
-  const openOpp = () => {
-    setOppDraft(view.opposition || "");
-    setOppSheet(true);
-  };
-  const saveOpp = () => {
-    updDraft((d) => ({ ...d, opposition: oppDraft.trim() }));
-    setOppSheet(false);
-  };
-
   if (goalEditor) {
     const initial = goalEditor.eventId
       ? view.events.find((e) => e.id === goalEditor.eventId)
@@ -1124,7 +1118,11 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           </div>
         )}
 
-        <Segmented tab={tab} setTab={setTab} />
+        <Segmented
+          tab={tab}
+          setTab={setTab}
+          secondLabel={editable ? "Details" : "Line-up"}
+        />
 
         {tab === "match" && (
           <LiveScore
@@ -1133,32 +1131,19 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
             us={us}
             them={them}
             locked={!editable}
-            showSwap={editable}
+            showSwap={false}
             plusDisabled={false}
-            nameBtnLabel="Change name"
-            onSwap={toggleHome}
-            onNameTap={openOpp}
             onOurGoal={() => setGoalEditor({})}
             onOppGoal={addOppGoal}
           />
         )}
       </div>
 
-      <div className="mb-4">
-        {editable ? (
-          <div className="flex flex-col gap-2">
-            <label className="text-base font-bold text-black">Match date</label>
-            <input
-              type="date"
-              value={view.date}
-              onChange={(e) => updDraft((d) => ({ ...d, date: e.target.value }))}
-              className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
-            />
-          </div>
-        ) : (
-          <p className="text-base font-medium text-[#454745]">{fmtDate(view.date, true)}</p>
-        )}
-      </div>
+      {!editable && tab === "match" && (
+        <p className="mb-4 text-base font-medium text-[#454745]">
+          {fmtDate(view.date, true)}
+        </p>
+      )}
 
       {tab === "match" ? (
         <div className="space-y-4">
@@ -1186,6 +1171,19 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
             </button>
           )}
         </div>
+      ) : editable ? (
+        <MatchSetupForm
+          opposition={view.opposition}
+          date={view.date}
+          home={view.home}
+          players={sortedLineUp}
+          isPlaying={isPlaying}
+          lockedIds={scoredIds}
+          onOpposition={(v) => updDraft((d) => ({ ...d, opposition: v }))}
+          onDate={(v) => updDraft((d) => ({ ...d, date: v }))}
+          onHome={(v) => updDraft((d) => ({ ...d, home: v }))}
+          onTogglePlayer={onToggle}
+        />
       ) : (
         <LineUpTab
           players={lineUp}
@@ -1193,7 +1191,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           onToggle={onToggle}
           goalsOf={goalsOf}
           assistsOf={assistsOf}
-          locked={!editable}
+          locked
         />
       )}
 
@@ -1246,38 +1244,6 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
             onBack();
           }}
         />
-      )}
-      {oppSheet && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
-          style={{ backgroundColor: "rgba(15,23,42,0.45)" }}
-        >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-900">Opposition name</h3>
-            <input
-              autoFocus
-              value={oppDraft}
-              onChange={(e) => setOppDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && saveOpp()}
-              placeholder="e.g. Riverside FC"
-              className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#163300]"
-            />
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                onClick={saveOpp}
-                className="w-full rounded-xl bg-[#163300] py-2.5 text-sm font-semibold text-white active:bg-black"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setOppSheet(false)}
-                className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
@@ -1351,7 +1317,7 @@ function Section({ title, children }) {
 
 // ---------- Live ----------
 
-function Segmented({ tab, setTab }) {
+function Segmented({ tab, setTab, secondLabel = "Line-up" }) {
   const opt = (id, label) => {
     const on = tab === id;
     return (
@@ -1370,7 +1336,7 @@ function Segmented({ tab, setTab }) {
   return (
     <div className="flex w-full items-center gap-1 rounded-full bg-[#16330014] p-0.5">
       {opt("match", "Match")}
-      {opt("lineup", "Line-up")}
+      {opt("lineup", secondLabel)}
     </div>
   );
 }
@@ -1380,7 +1346,7 @@ function LiveScoreCard({ label, ours, score, teamName, opposition, onNameTap, on
     <div className="flex h-[88px] items-center gap-4 rounded-3xl bg-[#163300] p-4">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-base font-light text-white">{label}</span>
-        {ours || locked ? (
+        {ours || locked || !onNameTap ? (
           <span className="truncate text-2xl font-bold leading-none text-white">
             {ours ? teamName.trim() || "Team" : opposition || "Opposition"}
           </span>
@@ -1697,10 +1663,240 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
   );
 }
 
+function MatchSetupForm({
+  opposition,
+  date,
+  home,
+  players,
+  isPlaying,
+  lockedIds,
+  onOpposition,
+  onDate,
+  onHome,
+  onTogglePlayer,
+}) {
+  const locked = lockedIds || new Set();
+  const rowBtn =
+    "flex w-full items-center gap-3 px-3 py-3 text-left text-base font-bold text-[#0e0f0c]";
+  const group =
+    "overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]";
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <label className="text-base font-bold text-black">Opposition (optional)</label>
+        <input
+          value={opposition}
+          onChange={(e) => onOpposition(e.target.value)}
+          placeholder="Opposition"
+          className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none placeholder:text-[#0e0f0c66] focus:border-[#0e0f0c]"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-base font-bold text-black">Match date</label>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => onDate(e.target.value)}
+          className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-base font-bold text-black">Venue</label>
+        <div className={group}>
+          {[
+            { v: true, label: "Home" },
+            { v: false, label: "Away" },
+          ].map((o) => (
+            <button
+              key={o.label}
+              onClick={() => onHome(o.v)}
+              className={rowBtn + " active:bg-[#1633001f]"}
+            >
+              <span className="flex-1">{o.label}</span>
+              <span
+                className={
+                  "flex size-5 shrink-0 items-center justify-center rounded-full border-2 " +
+                  (home === o.v ? "border-[#163300]" : "border-[#0e0f0c33]")
+                }
+              >
+                {home === o.v && <span className="size-2.5 rounded-full bg-[#163300]" />}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-base font-bold text-black">Available players</label>
+        {players.length === 0 ? (
+          <p className="rounded-2xl bg-[#16330014] p-4 text-sm text-[#454745]">
+            No players yet. Add your squad from the Team tab.
+          </p>
+        ) : (
+          <div className={group}>
+            {players.map((p) => {
+              const on = isPlaying(p.id);
+              const isLocked = locked.has(p.id);
+              const box = (
+                <span
+                  className={
+                    "flex size-5 shrink-0 items-center justify-center rounded-md border-2 " +
+                    (on
+                      ? "border-[#163300] bg-[#163300] text-white"
+                      : "border-[#0e0f0c33] text-transparent") +
+                    (isLocked ? " opacity-40" : "")
+                  }
+                >
+                  <Check size={14} strokeWidth={3} />
+                </span>
+              );
+              if (isLocked) {
+                return (
+                  <div key={p.id} className={rowBtn}>
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate">{p.name}</span>
+                      <span className="text-xs font-normal text-[#454745]">
+                        In the goal feed
+                      </span>
+                    </span>
+                    {box}
+                  </div>
+                );
+              }
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onTogglePlayer(p)}
+                  className={rowBtn + " active:bg-[#1633001f]"}
+                >
+                  <span className="flex-1 truncate">{p.name}</span>
+                  {box}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <MatchSetupForm
+        opposition={live.opposition}
+        date={live.date}
+        home={live.home}
+        players={squad}
+        isPlaying={isPlaying}
+        onOpposition={(v) => updLive((l) => ({ ...l, opposition: v }))}
+        onDate={(v) => updLive((l) => ({ ...l, date: v }))}
+        onHome={(v) => updLive((l) => ({ ...l, home: v }))}
+        onTogglePlayer={onToggle}
+      />
+      <button
+        onClick={onStart}
+        className="h-11 w-full rounded-full bg-[#9fe870] text-base font-bold text-[#163300] active:bg-[#8fd95f]"
+      >
+        Start match
+      </button>
+    </div>
+  );
+}
+
+function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
+  const snap = (l) => JSON.stringify({
+    opposition: l.opposition,
+    date: l.date,
+    home: l.home,
+    playing: l.playing || {},
+  });
+  const baseRef = useRef(snap(live));
+  const [draft, setDraft] = useState({
+    opposition: live.opposition,
+    date: live.date,
+    home: live.home,
+    playing: { ...(live.playing || {}) },
+  });
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
+  const isPlaying = (id) => draft.playing[id] !== false;
+  const dirty = () => snap(draft) !== baseRef.current;
+  const tryClose = () => (dirty() ? setConfirmClose(true) : onCancel());
+  const trySave = () => (dirty() ? setConfirmSave(true) : onCancel());
+  const commit = () =>
+    onSave({ ...draft, opposition: draft.opposition.trim() || "Opposition" });
+
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col bg-[#eef1ea]">
+      <div className="border-b border-black/[0.06] bg-[#eef1ea]/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
+          <button
+            onClick={tryClose}
+            aria-label="Close"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          <span className="text-base font-bold text-[#0e0f0c]">Edit match</span>
+          <button
+            onClick={trySave}
+            aria-label="Save"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
+          >
+            <Check size={20} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-6 pb-28 pt-4">
+        <MatchSetupForm
+          opposition={draft.opposition}
+          date={draft.date}
+          home={draft.home}
+          players={squad}
+          isPlaying={isPlaying}
+          lockedIds={lockedIds}
+          onOpposition={(v) => setDraft((d) => ({ ...d, opposition: v }))}
+          onDate={(v) => setDraft((d) => ({ ...d, date: v }))}
+          onHome={(v) => setDraft((d) => ({ ...d, home: v }))}
+          onTogglePlayer={(p) =>
+            setDraft((d) => ({
+              ...d,
+              playing: { ...d.playing, [p.id]: d.playing[p.id] === false },
+            }))
+          }
+        />
+      </div>
+
+      {confirmClose && (
+        <Modal
+          title="Discard changes?"
+          body="Your changes to this match won't be saved."
+          confirmLabel="Discard"
+          danger
+          onCancel={() => setConfirmClose(false)}
+          onConfirm={onCancel}
+        />
+      )}
+      {confirmSave && (
+        <Modal
+          title="Save changes?"
+          body="This updates the match details for everyone."
+          confirmLabel="Save"
+          onCancel={() => setConfirmSave(false)}
+          onConfirm={commit}
+        />
+      )}
+    </div>
+  );
+}
+
 function Live({ data, setData, roster, teamName, setTab, flash }) {
-  const [liveTab, setLiveTab] = useState("match");
-  const [oppSheet, setOppSheet] = useState(false);
-  const [oppDraft, setOppDraft] = useState("");
+  const [editSheet, setEditSheet] = useState(false);
   const [goalEditor, setGoalEditor] = useState(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -1727,7 +1923,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
             },
           }
     );
-  }, []);
+  }, [data.live]);
 
   if (!live) {
     return (
@@ -1748,19 +1944,9 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const goalsOf = (pid) => teamEvents.filter((e) => e.scorerId === pid).length;
   const assistsOf = (pid) => teamEvents.filter((e) => e.assistId === pid).length;
 
-  const toggleHome = () => updLive((l) => ({ ...l, home: !l.home }));
   const isPlaying = (pid) => live.playing?.[pid] !== false;
   const onToggle = (p) =>
     updLive((l) => ({ ...l, playing: { ...l.playing, [p.id]: !isPlaying(p.id) } }));
-
-  const openOpp = () => {
-    setOppDraft(live.opposition || "");
-    setOppSheet(true);
-  };
-  const saveOpp = () => {
-    updLive((l) => ({ ...l, opposition: oppDraft.trim() }));
-    setOppSheet(false);
-  };
 
   const halftimeMarker = live.events.find((e) => e.type === "halftime");
 
@@ -1792,6 +1978,12 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   };
 
   const lineUp = roster.filter((p) => p.active);
+  const squadSorted = [...lineUp].sort((a, b) => a.name.localeCompare(b.name));
+  const scoredIds = new Set();
+  teamEvents.forEach((e) => {
+    if (e.scorerId) scoredIds.add(e.scorerId);
+    if (e.assistId) scoredIds.add(e.assistId);
+  });
   const appeared = (pid) =>
     isPlaying(pid) || teamEvents.some((e) => e.scorerId === pid || e.assistId === pid);
 
@@ -1852,53 +2044,75 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     );
   }
 
+  if (!live.active) {
+    return (
+      <PreMatchSetup
+        live={live}
+        updLive={updLive}
+        squad={squadSorted}
+        isPlaying={isPlaying}
+        onToggle={onToggle}
+        onStart={startGame}
+      />
+    );
+  }
+
   return (
     <div>
-      <div className="sticky top-0 z-20 -mx-4 -mt-6 mb-4 space-y-4 border-b border-black/[0.06] bg-white/85 px-4 pb-4 pt-6 backdrop-blur-xl">
-        <Segmented tab={liveTab} setTab={setLiveTab} />
-        {liveTab === "match" && (
-          <LiveScore
-            live={live}
-            teamName={teamName}
-            us={us}
-            them={them}
-            onSwap={toggleHome}
-            onNameTap={openOpp}
-            onOurGoal={addOurGoal}
-            onOppGoal={addOppGoal}
-            showSwap={!live.active}
-            plusDisabled={!live.active}
-          />
-        )}
-      </div>
-
-      {liveTab === "match" ? (
-        <div className="space-y-4">
+      <div className="sticky top-0 z-20 -mx-4 -mt-6 mb-4 space-y-3 border-b border-black/[0.06] bg-white/85 px-4 pb-4 pt-6 backdrop-blur-xl">
+        <LiveScore
+          live={live}
+          teamName={teamName}
+          us={us}
+          them={them}
+          onOurGoal={addOurGoal}
+          onOppGoal={addOppGoal}
+          showSwap={false}
+          plusDisabled={false}
+        />
+        <div className="flex items-center gap-2">
           <button
             onClick={matchBtn.onClick}
-            className="w-full rounded-full bg-[#16330014] py-3 text-base font-bold text-[#454745] active:bg-[#1633001f]"
+            className="h-11 flex-1 rounded-full bg-[#16330014] text-base font-bold text-[#454745] active:bg-[#1633001f]"
           >
             {matchBtn.label}
           </button>
-
-          {live.active && (
-            <GoalFeed
-              events={live.events}
-              nameOf={nameOf}
-              teamName={teamName}
-              home={live.home}
-              onEdit={(e) => setGoalEditor({ eventId: e.id })}
-              onDelete={(e) => setConfirmDelete(e)}
-            />
-          )}
+          <button
+            onClick={() => setEditSheet(true)}
+            aria-label="Edit match"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]"
+          >
+            <Pencil size={20} />
+          </button>
         </div>
-      ) : (
-        <LineUpTab
-          players={lineUp}
-          isPlaying={isPlaying}
-          onToggle={onToggle}
-          goalsOf={goalsOf}
-          assistsOf={assistsOf}
+      </div>
+
+      <GoalFeed
+        events={live.events}
+        nameOf={nameOf}
+        teamName={teamName}
+        home={live.home}
+        onEdit={(e) => setGoalEditor({ eventId: e.id })}
+        onDelete={(e) => setConfirmDelete(e)}
+      />
+
+      {editSheet && (
+        <LiveEditSheet
+          live={live}
+          squad={squadSorted}
+          lockedIds={scoredIds}
+          onCancel={() => setEditSheet(false)}
+          onSave={(d) => {
+            updLive((l) => ({
+              ...l,
+              opposition: d.opposition,
+              date: d.date,
+              home: d.home,
+              playing: d.playing,
+            }));
+            setEditSheet(false);
+            flash("Match details updated");
+          }}
         />
       )}
 
@@ -1936,35 +2150,6 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         />
       )}
 
-      {oppSheet && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-900">Opposition name</h3>
-            <input
-              autoFocus
-              value={oppDraft}
-              onChange={(e) => setOppDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && saveOpp()}
-              placeholder="e.g. Riverside FC"
-              className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#163300]"
-            />
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                onClick={saveOpp}
-                className="w-full rounded-xl bg-[#163300] py-2.5 text-sm font-semibold text-white active:bg-black"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setOppSheet(false)}
-                className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
