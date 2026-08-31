@@ -23,6 +23,17 @@
       -webkit-tap-highlight-color: transparent;
       font-family: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", system-ui, -apple-system, "Segoe UI", sans-serif;
     }
+    /* Chrome sizes native date inputs from their content and can overflow the
+       column; pin them to their container. */
+    input[type="date"] {
+      box-sizing: border-box;
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+    }
+    input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+    input[type="date"]::-webkit-calendar-picker-indicator { margin-left: 0; flex-shrink: 0; }
   </style>
 </head>
 <body class="bg-slate-50">
@@ -1698,7 +1709,7 @@ function MatchSetupForm({
           type="date"
           value={date}
           onChange={(e) => onDate(e.target.value)}
-          className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
+          className="block h-11 w-full min-w-0 max-w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
         />
       </div>
 
