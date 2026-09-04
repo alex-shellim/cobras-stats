@@ -40,6 +40,11 @@
     }
     input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
     input[type="date"]::-webkit-calendar-picker-indicator { margin-left: 0; flex-shrink: 0; }
+    /* Tailwind's CDN build only emits the unprefixed backdrop-filter, which
+       Safari needs -webkit-backdrop-filter alongside to actually blur. */
+    .backdrop-blur-xl {
+      -webkit-backdrop-filter: blur(24px);
+    }
   </style>
 </head>
 <body class="bg-slate-50">
@@ -484,7 +489,10 @@ function App() {
       ...p,
       games: matches.filter((m) => appeared(m, p.id)).length,
       goals: matches.reduce((a, m) => a + ((m.goals && m.goals[p.id]) || 0), 0),
-      assists: matches.reduce((a, m) => a + ((m.assists && m.assists[p.id]) || 0), 0)
+      assists: matches.reduce((a, m) => a + ((m.assists && m.assists[p.id]) || 0), 0),
+      gold: matches.filter((m) => m.medals && m.medals.gold === p.id).length,
+      silver: matches.filter((m) => m.medals && m.medals.silver === p.id).length,
+      bronze: matches.filter((m) => m.medals && m.medals.bronze === p.id).length,
     }))
     .sort((a, b) => b.goals - a.goals || b.assists - a.assists || b.games - a.games || a.name.localeCompare(b.name));
 
@@ -570,29 +578,28 @@ function App() {
 
 // ---------- Team (Top Scorers) + Squad editor ----------
 
-function StatCells({ cells, muted, dark }) {
-  const divider = dark ? "bg-white/20" : "bg-[#16330014]";
-  const text = dark
-    ? muted
-      ? "font-light text-white"
-      : "font-bold text-white"
-    : muted
-    ? "font-medium text-[#454745]"
-    : "font-bold text-black";
+function StatRow({ cells }) {
   return (
-    <div className="flex shrink-0 items-stretch gap-1 self-stretch">
-      {cells.map((c, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <div className={"w-px shrink-0 " + divider} />}
-          <div
-            className={
-              "flex w-8 items-center justify-center text-center text-base tabular-nums " + text
-            }
-          >
-            {c}
+    <div className="flex gap-1 rounded-lg bg-[#16330014] px-1 py-2">
+      {cells.map(([label, value], i) => (
+        <React.Fragment key={label}>
+          {i > 0 && <div className="w-px shrink-0 bg-black/20" />}
+          <div className="flex flex-1 items-center justify-center gap-0.5 whitespace-nowrap text-base text-[#0e0f0c]">
+            <span className="font-light">{label}</span>
+            <span className="font-bold">{value}</span>
           </div>
         </React.Fragment>
       ))}
+    </div>
+  );
+}
+
+function PlayerCard({ p }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl bg-[#16330014] p-4">
+      <p className="truncate text-2xl font-bold text-[#0e0f0c]">{p.name}</p>
+      <StatRow cells={[["P:", p.games], ["G:", p.goals], ["A:", p.assists], ["G/A:", p.goals + p.assists]]} />
+      <StatRow cells={[["🥇", p.gold], ["🥈", p.silver], ["🥉", p.bronze]]} />
     </div>
   );
 }
@@ -773,35 +780,16 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
           body="Tap the edit button above to name your team and add players. Their goals and assists show up here."
         />
       ) : (
-        <div className="mt-6 overflow-hidden rounded-3xl bg-[#163300] pt-4">
-          <div className="px-4">
-            {clubName.trim() && (
-              <p className="truncate text-base text-white">{clubName}</p>
-            )}
+        <div className="mt-6 flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            {clubName.trim() && <p className="text-base text-[#0e0f0c]">{clubName}</p>}
             <p className="truncate text-[34px] font-bold leading-none tracking-tight text-[#9fe870]">
               {teamName.trim() || "Team"}
             </p>
           </div>
-          <div className="mt-4">
-            <div className="flex items-center justify-between bg-[#16330014] px-4">
-              <div className="py-2 text-base font-light text-white">Player</div>
-              <StatCells cells={["P", "G", "A", "G+A"]} dark muted />
-            </div>
-            {stats.map((p, i) => (
-              <div
-                key={p.id}
-                className={
-                  "flex items-center justify-between px-4 " +
-                  (i % 2 === 0 ? "bg-black/40" : "bg-black/20")
-                }
-              >
-                <div className="min-w-0 flex-1 truncate py-4 pr-3 text-base font-bold text-[#9fe870]">
-                  {p.name}
-                </div>
-                <StatCells cells={[p.games, p.goals, p.assists, p.goals + p.assists]} dark />
-              </div>
-            ))}
-          </div>
+          {stats.map((p) => (
+            <PlayerCard key={p.id} p={p} />
+          ))}
         </div>
       )}
 
@@ -969,6 +957,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
   const [confirmSave, setConfirmSave] = useState(false);
   const [confirmDelEvt, setConfirmDelEvt] = useState(null);
   const [confirmDelMatch, setConfirmDelMatch] = useState(false);
+  const [medalEditor, setMedalEditor] = useState(false);
 
   const viewEvents = useMemo(() => matchToEvents(match), [match]);
   const editable = mode === "edit";
@@ -978,6 +967,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
     home: match.home ?? true,
     events: viewEvents,
     appearances: match.appearances || [],
+    medals: match.medals || { gold: null, silver: null, bronze: null },
   };
 
   const teamEv = view.events.filter((e) => e.type === "team");
@@ -1007,6 +997,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       home: match.home ?? true,
       events: viewEvents.map((e) => ({ ...e })),
       appearances: [...(match.appearances || [])],
+      medals: { ...(match.medals || { gold: null, silver: null, bronze: null }) },
     };
     baseRef.current = JSON.stringify(d);
     setDraft(d);
@@ -1019,6 +1010,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
     setMode("view");
     setConfirmClose(false);
     setConfirmSave(false);
+    setMedalEditor(false);
   };
   const commit = () => {
     const goals = {};
@@ -1039,6 +1031,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       oppGoals: draft.events.filter((e) => e.type === "opp").length,
       appearances: draft.appearances,
       events: draft.events,
+      medals: draft.medals,
     };
     setData((dd) => ({
       ...dd,
@@ -1089,6 +1082,19 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
         onDiscard={() => {
           if (goalEditor.eventId) deleteEvent(goalEditor.eventId);
           setGoalEditor(null);
+        }}
+      />
+    );
+  }
+
+  if (medalEditor) {
+    return (
+      <AwardMedalsScreen
+        players={sortedLineUp}
+        initial={draft.medals}
+        onDone={(medals) => {
+          updDraft((d) => ({ ...d, medals }));
+          setMedalEditor(false);
         }}
       />
     );
@@ -1179,6 +1185,26 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
               No goals recorded.
             </p>
           )}
+
+          <div className="rounded-3xl bg-[#16330014] p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-base font-bold text-[#0e0f0c]">Medal of the match</p>
+              {editable && (
+                <button
+                  onClick={() => setMedalEditor(true)}
+                  className="shrink-0 rounded-full bg-white px-4 py-1 text-base font-bold text-[#454745] active:bg-white/70"
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-base text-[#0e0f0c]">
+              <span>🥇 {nameOf(view.medals.gold)}</span>
+              <span>🥈 {nameOf(view.medals.silver)}</span>
+              <span>🥉 {nameOf(view.medals.bronze)}</span>
+            </div>
+          </div>
+
           {editable && (
             <button
               onClick={() => setConfirmDelMatch(true)}
@@ -1301,22 +1327,6 @@ function EditPlayers({ players, draft, bump }) {
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-function StatRow({ name, count, tone }) {
-  return (
-    <div className="flex items-center justify-between border-b border-slate-50 px-4 py-3 last:border-0">
-      <span className="font-medium">{name}</span>
-      <span
-        className={
-          "rounded-lg px-2 py-0.5 text-sm font-bold tabular-nums " +
-          (tone === "goal" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600")
-        }
-      >
-        ×{count}
-      </span>
     </div>
   );
 }
@@ -1680,6 +1690,106 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
   );
 }
 
+const MEDAL_CATEGORIES = [
+  { key: "gold", label: "🥇 Gold" },
+  { key: "silver", label: "🥈 Silver" },
+  { key: "bronze", label: "🥉 Bronze" },
+];
+
+function MedalPicker({ players, medals, onChange }) {
+  const rowBtn =
+    "flex w-full items-center gap-3 px-3 py-3 text-left text-base font-bold";
+  const group = "overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]";
+  const radio = (selected) => (
+    <span
+      className={
+        "flex size-5 shrink-0 items-center justify-center rounded-full border-2 " +
+        (selected ? "border-[#163300]" : "border-[#0e0f0c33]")
+      }
+    >
+      {selected && <span className="size-2.5 rounded-full bg-[#163300]" />}
+    </span>
+  );
+  return (
+    <div className="flex flex-col gap-6">
+      {MEDAL_CATEGORIES.map((cat) => (
+        <div key={cat.key} className="flex flex-col gap-2">
+          <label className="text-base font-bold text-black">{cat.label}</label>
+          <div className={group}>
+            <button
+              onClick={() => onChange(cat.key, null)}
+              className={rowBtn + " text-[#454745] active:bg-[#1633001f]"}
+            >
+              <span className="flex-1">No award</span>
+              {radio(!medals[cat.key])}
+            </button>
+            {players.map((p) => {
+              const takenElsewhere = MEDAL_CATEGORIES.some(
+                (o) => o.key !== cat.key && medals[o.key] === p.id
+              );
+              return (
+                <button
+                  key={p.id}
+                  disabled={takenElsewhere}
+                  onClick={() => onChange(cat.key, p.id)}
+                  className={
+                    rowBtn +
+                    (takenElsewhere
+                      ? " text-[#0e0f0c66]"
+                      : " text-[#0e0f0c] active:bg-[#1633001f]")
+                  }
+                >
+                  <span className="flex-1 truncate">{p.name}</span>
+                  {radio(medals[cat.key] === p.id)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AwardMedalsScreen({ players, initial, onDone }) {
+  const empty = { gold: null, silver: null, bronze: null };
+  const [medals, setMedals] = useState(initial || empty);
+  const onChange = (key, id) => setMedals((m) => ({ ...m, [key]: id }));
+
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col bg-white">
+      <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
+          <button
+            onClick={() => onDone(initial || empty)}
+            aria-label="Skip"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          <span className="text-base font-bold text-[#0e0f0c]">Medal of the match</span>
+          <button
+            onClick={() => onDone(medals)}
+            aria-label="Continue"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
+          >
+            <Check size={20} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-6 pb-28 pt-4">
+        {players.length === 0 ? (
+          <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
+            No players in the line-up.
+          </p>
+        ) : (
+          <MedalPicker players={players} medals={medals} onChange={onChange} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MatchSetupForm({
   opposition,
   date,
@@ -1915,6 +2025,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
 function Live({ data, setData, roster, teamName, setTab, flash }) {
   const [editSheet, setEditSheet] = useState(false);
   const [goalEditor, setGoalEditor] = useState(null);
+  const [awardMedals, setAwardMedals] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const { live } = data;
@@ -2021,6 +2132,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
       oppGoals: them,
       appearances: lineUp.filter((p) => appeared(p.id)).map((p) => p.id),
       events: live.events,
+      medals: live.medals || { gold: null, silver: null, bronze: null },
     };
     setData((d) => ({ ...d, matches: [record, ...d.matches], live: null }));
     setConfirmEnd(false);
@@ -2036,8 +2148,25 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const matchBtn = !live.active
     ? { label: "Start match", onClick: startGame }
     : halftimeMarker
-    ? { label: "Full-time", onClick: () => setConfirmEnd(true) }
+    ? { label: "Full-time", onClick: () => setAwardMedals(true) }
     : { label: "Half-time", onClick: addHalftime };
+
+  if (awardMedals) {
+    const eligible = lineUp
+      .filter((p) => appeared(p.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return (
+      <AwardMedalsScreen
+        players={eligible}
+        initial={live.medals}
+        onDone={(medals) => {
+          updLive((l) => ({ ...l, medals }));
+          setAwardMedals(false);
+          setConfirmEnd(true);
+        }}
+      />
+    );
+  }
 
   if (goalEditor) {
     const initial = goalEditor.eventId
