@@ -50,7 +50,7 @@
 <body class="bg-slate-50">
   <div id="root"></div>
   <script type="text/babel" data-presets="react-classic">
-const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 /* =====================================================================
    FIREBASE  ▸ paste your own config below (Console ▸ Project settings ▸
@@ -123,6 +123,13 @@ const Stopwatch = (p) => <Svg {...p}><line x1="10" y1="2" x2="14" y2="2" /><line
 const ArrowUpDown = (p) => <Svg {...p}><path d="m21 16-4 4-4-4" /><path d="M17 20V4" /><path d="m3 8 4-4 4 4" /><path d="M7 4v16" /></Svg>;
 const Trash2 = (p) => <Svg {...p}><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></Svg>;
 const Pencil = (p) => <Svg {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></Svg>;
+const MoreHorizontal = (p) => (
+  <Svg {...p}>
+    <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
+  </Svg>
+);
 const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></Svg>;
 const Users = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Svg>;
 const ArrowLeftRight = (p) => <Svg {...p}><path d="M8 3 4 7l4 4" /><path d="M4 7h16" /><path d="m16 21 4-4-4-4" /><path d="M20 17H4" /></Svg>;
@@ -593,9 +600,9 @@ function StatRow({ cells }) {
   );
 }
 
-function PlayerCard({ p, cardRef }) {
+function PlayerCard({ p }) {
   return (
-    <div ref={cardRef} className="flex flex-col gap-2 rounded-2xl bg-[#16330014] p-4">
+    <div className="flex flex-col gap-2 rounded-2xl bg-[#16330014] p-4">
       <p className="truncate text-2xl font-bold text-[#0e0f0c]">{p.name}</p>
       <StatRow cells={[["P:", p.games], ["G:", p.goals], ["A:", p.assists], ["G/A:", p.goals + p.assists]]} />
       <StatRow cells={[["🥇", p.gold], ["🥈", p.silver], ["🥉", p.bronze]]} />
@@ -620,6 +627,8 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
   const [sortBy, setSortBy] = useState("goals");
+  const [fading, setFading] = useState(false);
+  const fadeTimer = useRef(null);
   const baseRef = useRef(null);
   const squad = roster.filter((p) => p.active);
   const draftSquad = draft ? draft.roster.filter((p) => p.active) : [];
@@ -630,29 +639,15 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
     [stats, sortBy]
   );
 
-  const cardRefs = useRef({});
-  const prevTopsRef = useRef({});
-  useLayoutEffect(() => {
-    const nextTops = {};
-    sortedStats.forEach((p) => {
-      const el = cardRefs.current[p.id];
-      if (el) nextTops[p.id] = el.getBoundingClientRect().top;
-    });
-    Object.keys(nextTops).forEach((id) => {
-      const el = cardRefs.current[id];
-      const prevTop = prevTopsRef.current[id];
-      if (!el || prevTop === undefined) return;
-      const dy = prevTop - nextTops[id];
-      if (!dy) return;
-      el.style.transition = "none";
-      el.style.transform = `translateY(${dy}px)`;
-      requestAnimationFrame(() => {
-        el.style.transition = "transform 320ms cubic-bezier(0.22,1,0.36,1)";
-        el.style.transform = "";
-      });
-    });
-    prevTopsRef.current = nextTops;
-  }, [sortedStats.map((p) => p.id).join(",")]);
+  const changeSort = (key) => {
+    if (key === sortBy) return;
+    clearTimeout(fadeTimer.current);
+    setFading(true);
+    fadeTimer.current = setTimeout(() => {
+      setSortBy(key);
+      setFading(false);
+    }, 150);
+  };
 
   const openManage = () => {
     const d = {
@@ -716,9 +711,9 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
       </StickyHeader>
 
       {manage ? (
-        <div className="fixed inset-0 z-40 flex flex-col bg-[#eef1ea]">
-          <div className="border-b border-black/[0.06] bg-[#eef1ea]/70 backdrop-blur-xl">
-            <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
+        <div className="fixed inset-0 z-40 flex flex-col bg-white">
+          <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
+            <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
               <button
                 onClick={tryClose}
                 aria-label="Close"
@@ -830,7 +825,7 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
             {SORT_OPTIONS.map((o) => (
               <button
                 key={o.key}
-                onClick={() => setSortBy(o.key)}
+                onClick={() => changeSort(o.key)}
                 className={
                   "flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-4 text-base font-bold " +
                   (sortBy === o.key
@@ -843,16 +838,16 @@ function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
             ))}
           </div>
 
-          {sortedStats.map((p) => (
-            <PlayerCard
-              key={p.id}
-              p={p}
-              cardRef={(el) => {
-                if (el) cardRefs.current[p.id] = el;
-                else delete cardRefs.current[p.id];
-              }}
-            />
-          ))}
+          <div
+            className={
+              "flex flex-col gap-4 transition-opacity duration-150 ease-in-out " +
+              (fading ? "opacity-0" : "opacity-100")
+            }
+          >
+            {sortedStats.map((p) => (
+              <PlayerCard key={p.id} p={p} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -1018,6 +1013,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
   const [goalEditor, setGoalEditor] = useState(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
+  const [goalMenu, setGoalMenu] = useState(null);
   const [confirmDelEvt, setConfirmDelEvt] = useState(null);
   const [confirmDelMatch, setConfirmDelMatch] = useState(false);
   const [medalEditor, setMedalEditor] = useState(false);
@@ -1237,11 +1233,11 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
             events={view.events}
             nameOf={nameOf}
             teamName={teamName}
+            opposition={view.opposition}
             home={view.home}
             heading={false}
             locked={!editable}
-            onEdit={(e) => setGoalEditor({ eventId: e.id })}
-            onDelete={(e) => setConfirmDelEvt(e)}
+            onMenu={(e) => (e.type === "team" ? setGoalMenu(e) : setConfirmDelEvt(e))}
           />
           {view.events.length === 0 && (
             <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
@@ -1334,6 +1330,23 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           onConfirm={() => {
             deleteEvent(confirmDelEvt.id);
             setConfirmDelEvt(null);
+          }}
+        />
+      )}
+      {goalMenu && (
+        <Modal
+          title="Edit or delete this goal?"
+          body="Deleting it can't be undone."
+          confirmLabel="Edit"
+          secondaryLabel="Delete"
+          onCancel={() => setGoalMenu(null)}
+          onConfirm={() => {
+            setGoalEditor({ eventId: goalMenu.id });
+            setGoalMenu(null);
+          }}
+          onSecondary={() => {
+            deleteEvent(goalMenu.id);
+            setGoalMenu(null);
           }}
         />
       )}
@@ -1569,78 +1582,80 @@ function LineUpTab({ players, isPlaying, onToggle, goalsOf, assistsOf, locked })
   );
 }
 
-function GoalFeed({ events, nameOf, teamName, home, onEdit, onDelete, locked, heading = true }) {
+function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked, heading = true }) {
   if (events.length === 0) return null;
-  const pill =
-    "shrink-0 rounded-full bg-[#16330014] px-4 py-1 text-base font-bold text-[#454745] active:bg-[#1633001f]";
+  const iconBtn =
+    "flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]";
   return (
     <div className="space-y-3">
       {heading && <p className="text-base font-bold text-[#0e0f0c]">Goal feed</p>}
-      {[...events].reverse().map((e) => {
-        if (e.type === "team")
-          return (
-            <div key={e.id} className="flex items-start gap-2 rounded-3xl bg-[#e2f6d5] p-4">
-              <div className="min-w-0 flex-1">
-                <div className="text-base">
-                  <span className="font-bold text-[#0e0f0c]">GOAL! </span>
-                  <span className="font-light text-[#0e0f0c]">{teamName.trim() || "Team"}</span>
-                </div>
-                {(e.scorerId || e.assistId) && (
-                  <div className="mt-1 flex flex-wrap gap-x-3 text-base">
-                    {e.scorerId && (
-                      <span>
-                        <span className="font-bold text-[#0e0f0c]">G: </span>
-                        <span className="font-light text-[#0e0f0c]">{nameOf(e.scorerId)}</span>
-                      </span>
-                    )}
-                    {e.assistId && (
-                      <span>
-                        <span className="font-bold text-[#0e0f0c]">A: </span>
-                        <span className="font-light text-[#0e0f0c]">{nameOf(e.assistId)}</span>
-                      </span>
-                    )}
+      <div className="divide-y divide-black/20 rounded-3xl bg-[#16330014] px-4">
+        {[...events].reverse().map((e) => {
+          if (e.type === "team")
+            return (
+              <div key={e.id} className="flex items-start gap-2 py-4">
+                <div className="min-w-0 flex-1">
+                  <div className="text-base">
+                    <span className="font-bold text-[#0e0f0c]">GOAL for </span>
+                    <span className="font-bold text-[#0e0f0c]">{teamName.trim() || "Team"}!</span>
                   </div>
+                  {(e.scorerId || e.assistId) && (
+                    <div className="mt-1 flex flex-wrap gap-x-3 text-base">
+                      {e.scorerId && (
+                        <span>
+                          <span className="font-bold text-[#0e0f0c]">G: </span>
+                          <span className="font-light text-[#0e0f0c]">{nameOf(e.scorerId)}</span>
+                        </span>
+                      )}
+                      {e.assistId && (
+                        <span>
+                          <span className="font-bold text-[#0e0f0c]">A: </span>
+                          <span className="font-light text-[#0e0f0c]">{nameOf(e.assistId)}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {!locked && (
+                  <button onClick={() => onMenu(e)} aria-label="Goal options" className={iconBtn}>
+                    <MoreHorizontal size={20} />
+                  </button>
                 )}
               </div>
-              {!locked && (
-                <button onClick={() => onEdit(e)} className={pill}>
-                  Edit
-                </button>
-              )}
-            </div>
-          );
-        if (e.type === "halftime") {
-          const homeScore = home ? e.us : e.them;
-          const awayScore = home ? e.them : e.us;
-          return (
-            <div key={e.id} className="flex items-center gap-2 rounded-3xl bg-[#16330014] p-4">
-              <span className="min-w-0 flex-1 text-base">
-                <span className="font-bold text-[#0e0f0c]">Half time: </span>
-                <span className="font-light text-[#0e0f0c]">
-                  {homeScore}–{awayScore}
+            );
+          if (e.type === "halftime") {
+            const homeScore = home ? e.us : e.them;
+            const awayScore = home ? e.them : e.us;
+            return (
+              <div key={e.id} className="flex items-center gap-2 py-4">
+                <span className="min-w-0 flex-1 text-base">
+                  <span className="font-bold text-[#0e0f0c]">Half time: </span>
+                  <span className="font-light text-[#0e0f0c]">
+                    {homeScore}–{awayScore}
+                  </span>
                 </span>
+                {!locked && (
+                  <button onClick={() => onMenu(e)} aria-label="Half-time options" className={iconBtn}>
+                    <MoreHorizontal size={20} />
+                  </button>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div key={e.id} className="flex items-center gap-2 py-4">
+              <span className="min-w-0 flex-1 text-base font-bold text-[#0e0f0c]">
+                {(opposition || "Opposition").trim()} goal
               </span>
               {!locked && (
-                <button onClick={() => onDelete(e)} className={pill}>
-                  Delete
+                <button onClick={() => onMenu(e)} aria-label="Opposition goal options" className={iconBtn}>
+                  <MoreHorizontal size={20} />
                 </button>
               )}
             </div>
           );
-        }
-        return (
-          <div key={e.id} className="flex items-center gap-2 rounded-3xl bg-[#ff383c24] p-4">
-            <span className="min-w-0 flex-1 text-base font-bold text-[#0e0f0c]">
-              Opposition goal
-            </span>
-            {!locked && (
-              <button onClick={() => onDelete(e)} className={pill}>
-                Delete
-              </button>
-            )}
-          </div>
-        );
-      })}
+        })}
+      </div>
     </div>
   );
 }
@@ -1665,7 +1680,7 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
+        <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
           <button
             onClick={() => setConfirmTrash(true)}
             aria-label={editing ? "Delete goal" : "Discard goal"}
@@ -1822,7 +1837,7 @@ function AwardMedalsScreen({ players, initial, onDone }) {
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
+        <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
           <button
             onClick={() => onDone(initial || empty)}
             aria-label="Skip"
@@ -2021,9 +2036,9 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
     onSave({ ...draft, opposition: draft.opposition.trim() || "Opposition" });
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-[#eef1ea]">
-      <div className="border-b border-black/[0.06] bg-[#eef1ea]/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
+    <div className="fixed inset-0 z-40 flex flex-col bg-white">
+      <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
           <button
             onClick={tryClose}
             aria-label="Close"
@@ -2091,6 +2106,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const [awardMedals, setAwardMedals] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [goalMenu, setGoalMenu] = useState(null);
   const { live } = data;
 
   const nameOf = (id) => (roster.find((p) => p.id === id) || {}).name || "—";
@@ -2300,9 +2316,9 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         events={live.events}
         nameOf={nameOf}
         teamName={teamName}
+        opposition={live.opposition}
         home={live.home}
-        onEdit={(e) => setGoalEditor({ eventId: e.id })}
-        onDelete={(e) => setConfirmDelete(e)}
+        onMenu={(e) => (e.type === "team" ? setGoalMenu(e) : setConfirmDelete(e))}
       />
 
       {editSheet && (
@@ -2355,6 +2371,24 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           onConfirm={() => {
             deleteEvent(confirmDelete.id);
             setConfirmDelete(null);
+          }}
+        />
+      )}
+
+      {goalMenu && (
+        <Modal
+          title="Edit or delete this goal?"
+          body="Deleting it can't be undone."
+          confirmLabel="Edit"
+          secondaryLabel="Delete"
+          onCancel={() => setGoalMenu(null)}
+          onConfirm={() => {
+            setGoalEditor({ eventId: goalMenu.id });
+            setGoalMenu(null);
+          }}
+          onSecondary={() => {
+            deleteEvent(goalMenu.id);
+            setGoalMenu(null);
           }}
         />
       )}
