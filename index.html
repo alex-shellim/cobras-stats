@@ -618,7 +618,7 @@ const SORT_OPTIONS = [
   { key: "goals", label: "Goals", value: (p) => p.goals },
   { key: "assists", label: "Assists", value: (p) => p.assists },
   { key: "ga", label: "G+A", value: (p) => p.goals + p.assists },
-  { key: "medals", label: "Medals", value: (p) => p.gold + p.silver + p.bronze },
+  { key: "medals", label: "Medals", value: (p) => p.gold * 3 + p.silver * 2 + p.bronze },
 ];
 
 function Scorers({ stats, setData, roster, teamName, clubName, flash }) {
