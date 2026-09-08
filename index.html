@@ -967,8 +967,7 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
                 <ResultBadge us={us} them={them} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-base font-bold text-[#0e0f0c]">
-                    {home ? "vs " : "@ "}
-                    {m.opposition || "Opposition"}
+                    vs {m.opposition || "Opposition"}
                   </div>
                   <div className="mt-0.5 text-sm font-light text-[#454745]">
                     {fmtDate(m.date)} · {home ? "Home" : "Away"}
