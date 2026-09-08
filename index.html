@@ -81,7 +81,7 @@ try {
 const normalizeLive = (l) => {
   if (!l) return null;
   if (Array.isArray(l.events))
-    return { active: l.active !== false, format: "halves", ...l };
+    return { active: l.active !== false, format: "halves", type: null, ...l };
   const events = [];
   Object.entries(l.goals || {}).forEach(([pid, n]) => {
     for (let i = 0; i < n; i++)
@@ -93,6 +93,7 @@ const normalizeLive = (l) => {
     opposition: l.opposition || "",
     home: l.home !== false,
     format: l.format || "halves",
+    type: l.type || null,
     playing: l.playing || {},
     active: true,
     events,
@@ -966,8 +967,15 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
               >
                 <ResultBadge us={us} them={them} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-base font-bold text-[#0e0f0c]">
-                    vs {m.opposition || "Opposition"}
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-base font-bold text-[#0e0f0c]">
+                      vs {m.opposition || "Opposition"}
+                    </span>
+                    {m.type && (
+                      <span className="shrink-0 rounded-full bg-black/[0.06] px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#454745]">
+                        {m.type}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-0.5 text-sm font-light text-[#454745]">
                     {fmtDate(m.date)} · {home ? "Home" : "Away"}
@@ -1026,6 +1034,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
     opposition: match.opposition || "",
     home: match.home ?? true,
     format: match.format || "halves",
+    type: match.type || null,
     events: viewEvents,
     appearances: match.appearances || [],
     medals: match.medals || { gold: null, silver: null, bronze: null },
@@ -1057,6 +1066,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       opposition: match.opposition || "",
       home: match.home ?? true,
       format: match.format || "halves",
+      type: match.type || null,
       events: viewEvents.map((e) => ({ ...e })),
       appearances: [...(match.appearances || [])],
       medals: { ...(match.medals || { gold: null, silver: null, bronze: null }) },
@@ -1089,6 +1099,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       opposition: draft.opposition.trim(),
       home: draft.home,
       format: draft.format,
+      type: draft.type || null,
       goals,
       assists,
       oppGoals: draft.events.filter((e) => e.type === "opp").length,
@@ -1267,6 +1278,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           opposition={view.opposition}
           date={view.date}
           home={view.home}
+          type={view.type}
           format={view.format}
           players={sortedLineUp}
           isPlaying={isPlaying}
@@ -1274,6 +1286,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           onOpposition={(v) => updDraft((d) => ({ ...d, opposition: v }))}
           onDate={(v) => updDraft((d) => ({ ...d, date: v }))}
           onHome={(v) => updDraft((d) => ({ ...d, home: v }))}
+          onType={(v) => updDraft((d) => ({ ...d, type: v }))}
           onFormat={(v) => updDraft((d) => ({ ...d, format: v }))}
           onTogglePlayer={onToggle}
         />
@@ -1848,11 +1861,13 @@ function MatchSetupForm({
   players,
   isPlaying,
   lockedIds,
+  type,
   format,
   showFormat = true,
   onOpposition,
   onDate,
   onHome,
+  onType,
   onFormat,
   onTogglePlayer,
 }) {
@@ -1909,9 +1924,36 @@ function MatchSetupForm({
         </div>
       </div>
 
+      <div className="flex flex-col gap-2">
+        <label className="text-base font-bold text-black">Match type (optional)</label>
+        <div className={group}>
+          {[
+            { v: "league", label: "League" },
+            { v: "friendly", label: "Friendly" },
+            { v: "tournament", label: "Tournament" },
+          ].map((o) => (
+            <button
+              key={o.v}
+              onClick={() => onType(type === o.v ? null : o.v)}
+              className={rowBtn + " active:bg-[#1633001f]"}
+            >
+              <span className="flex-1">{o.label}</span>
+              <span
+                className={
+                  "flex size-5 shrink-0 items-center justify-center rounded-full border-2 " +
+                  (type === o.v ? "border-[#163300]" : "border-[#0e0f0c33]")
+                }
+              >
+                {type === o.v && <span className="size-2.5 rounded-full bg-[#163300]" />}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {showFormat && (
         <div className="flex flex-col gap-2">
-          <label className="text-base font-bold text-black">Match format</label>
+          <label className="text-base font-bold text-black">Match format (optional)</label>
           <div className={group}>
             {[
               { v: "halves", label: "Halves" },
@@ -2001,12 +2043,14 @@ function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart }) {
         opposition={live.opposition}
         date={live.date}
         home={live.home}
+        type={live.type}
         format={live.format}
         players={squad}
         isPlaying={isPlaying}
         onOpposition={(v) => updLive((l) => ({ ...l, opposition: v }))}
         onDate={(v) => updLive((l) => ({ ...l, date: v }))}
         onHome={(v) => updLive((l) => ({ ...l, home: v }))}
+        onType={(v) => updLive((l) => ({ ...l, type: v }))}
         onFormat={(v) => updLive((l) => ({ ...l, format: v }))}
         onTogglePlayer={onToggle}
       />
@@ -2025,6 +2069,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
     opposition: l.opposition,
     date: l.date,
     home: l.home,
+    type: l.type || null,
     format: l.format || "halves",
     playing: l.playing || {},
   });
@@ -2033,6 +2078,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
     opposition: live.opposition,
     date: live.date,
     home: live.home,
+    type: live.type || null,
     format: live.format || "halves",
     playing: { ...(live.playing || {}) },
   });
@@ -2072,6 +2118,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
           opposition={draft.opposition}
           date={draft.date}
           home={draft.home}
+          type={draft.type}
           format={draft.format}
           players={squad}
           isPlaying={isPlaying}
@@ -2079,6 +2126,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
           onOpposition={(v) => setDraft((d) => ({ ...d, opposition: v }))}
           onDate={(v) => setDraft((d) => ({ ...d, date: v }))}
           onHome={(v) => setDraft((d) => ({ ...d, home: v }))}
+          onType={(v) => setDraft((d) => ({ ...d, type: v }))}
           onFormat={(v) => setDraft((d) => ({ ...d, format: v }))}
           onTogglePlayer={(p) =>
             setDraft((d) => ({
@@ -2134,6 +2182,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
               date: today(),
               opposition: "",
               home: true,
+              type: null,
               format: "halves",
               active: false,
               playing: Object.fromEntries(
@@ -2230,6 +2279,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
       opposition: live.opposition.trim(),
       home: live.home,
       format: live.format || "halves",
+      type: live.type || null,
       goals,
       assists,
       oppGoals: them,
@@ -2365,6 +2415,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
               opposition: d.opposition,
               date: d.date,
               home: d.home,
+              type: d.type,
               format: d.format,
               playing: d.playing,
             }));
