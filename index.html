@@ -80,7 +80,8 @@ try {
 // Migrate any doc still on the old shape so older sessions keep working.
 const normalizeLive = (l) => {
   if (!l) return null;
-  if (Array.isArray(l.events)) return { active: l.active !== false, ...l };
+  if (Array.isArray(l.events))
+    return { active: l.active !== false, format: "halves", ...l };
   const events = [];
   Object.entries(l.goals || {}).forEach(([pid, n]) => {
     for (let i = 0; i < n; i++)
@@ -91,6 +92,7 @@ const normalizeLive = (l) => {
     date: l.date || today(),
     opposition: l.opposition || "",
     home: l.home !== false,
+    format: l.format || "halves",
     playing: l.playing || {},
     active: true,
     events,
@@ -1024,6 +1026,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
     date: match.date,
     opposition: match.opposition || "",
     home: match.home ?? true,
+    format: match.format || "halves",
     events: viewEvents,
     appearances: match.appearances || [],
     medals: match.medals || { gold: null, silver: null, bronze: null },
@@ -1054,6 +1057,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       date: match.date,
       opposition: match.opposition || "",
       home: match.home ?? true,
+      format: match.format || "halves",
       events: viewEvents.map((e) => ({ ...e })),
       appearances: [...(match.appearances || [])],
       medals: { ...(match.medals || { gold: null, silver: null, bronze: null }) },
@@ -1085,6 +1089,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       date: draft.date,
       opposition: draft.opposition.trim(),
       home: draft.home,
+      format: draft.format,
       goals,
       assists,
       oppGoals: draft.events.filter((e) => e.type === "opp").length,
@@ -1138,10 +1143,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
         players={pick.length ? pick : lineUp}
         initial={initial}
         onSave={saveGoalEvent}
-        onDiscard={() => {
-          if (goalEditor.eventId) deleteEvent(goalEditor.eventId);
-          setGoalEditor(null);
-        }}
+        onClose={() => setGoalEditor(null)}
       />
     );
   }
@@ -1207,25 +1209,26 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
         />
 
         {tab === "match" && (
-          <LiveScore
-            live={view}
-            teamName={teamName}
-            us={us}
-            them={them}
-            locked={!editable}
-            showSwap={false}
-            plusDisabled={false}
-            onOurGoal={() => setGoalEditor({})}
-            onOppGoal={addOppGoal}
-          />
+          <>
+            {!editable && (
+              <p className="text-base font-medium text-[#454745]">
+                {fmtDate(view.date, true)}
+              </p>
+            )}
+            <LiveScore
+              live={view}
+              teamName={teamName}
+              us={us}
+              them={them}
+              locked={!editable}
+              showSwap={false}
+              plusDisabled={false}
+              onOurGoal={() => setGoalEditor({})}
+              onOppGoal={addOppGoal}
+            />
+          </>
         )}
       </div>
-
-      {!editable && tab === "match" && (
-        <p className="mb-4 text-base font-medium text-[#454745]">
-          {fmtDate(view.date, true)}
-        </p>
-      )}
 
       {tab === "match" ? (
         <div className="space-y-4">
@@ -1245,24 +1248,11 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
             </p>
           )}
 
-          <div className="rounded-3xl bg-[#16330014] p-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-base font-bold text-[#0e0f0c]">Medal of the match</p>
-              {editable && (
-                <button
-                  onClick={() => setMedalEditor(true)}
-                  className="shrink-0 rounded-full bg-white px-4 py-1 text-base font-bold text-[#454745] active:bg-white/70"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-base text-[#0e0f0c]">
-              <span>🥇 {nameOf(view.medals.gold)}</span>
-              <span>🥈 {nameOf(view.medals.silver)}</span>
-              <span>🥉 {nameOf(view.medals.bronze)}</span>
-            </div>
-          </div>
+          <Medals
+            medals={view.medals}
+            nameOf={nameOf}
+            onEdit={editable ? () => setMedalEditor(true) : undefined}
+          />
 
           {editable && (
             <button
@@ -1278,23 +1268,18 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           opposition={view.opposition}
           date={view.date}
           home={view.home}
+          format={view.format}
           players={sortedLineUp}
           isPlaying={isPlaying}
           lockedIds={scoredIds}
           onOpposition={(v) => updDraft((d) => ({ ...d, opposition: v }))}
           onDate={(v) => updDraft((d) => ({ ...d, date: v }))}
           onHome={(v) => updDraft((d) => ({ ...d, home: v }))}
+          onFormat={(v) => updDraft((d) => ({ ...d, format: v }))}
           onTogglePlayer={onToggle}
         />
       ) : (
-        <LineUpTab
-          players={lineUp}
-          isPlaying={isPlaying}
-          onToggle={onToggle}
-          goalsOf={goalsOf}
-          assistsOf={assistsOf}
-          locked
-        />
+        <LineUpTab players={lineUp} goalsOf={goalsOf} assistsOf={assistsOf} />
       )}
 
       {confirmClose && (
@@ -1319,8 +1304,8 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       {confirmDelEvt && (
         <Modal
           title={
-            confirmDelEvt.type === "halftime"
-              ? "Remove the half-time marker?"
+            confirmDelEvt.type === "halftime" || confirmDelEvt.type === "period"
+              ? "Remove this marker?"
               : "Remove this opposition goal?"
           }
           body="This can't be undone."
@@ -1520,67 +1505,72 @@ function LiveScore({ live, teamName, us, them, onSwap, onNameTap, onOurGoal, onO
   );
 }
 
-function LineUpTab({ players, isPlaying, onToggle, goalsOf, assistsOf, locked }) {
+function LineUpTab({ players, goalsOf, assistsOf }) {
   const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
   if (players.length === 0)
     return (
       <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
-        No players yet. Add your squad from the Team tab.
+        No line-up recorded.
       </p>
     );
   return (
     <div className="space-y-4">
       {sorted.map((p) => {
-        const playing = isPlaying(p.id);
+        const g = goalsOf(p.id);
+        const a = assistsOf(p.id);
         return (
-          <div
-            key={p.id}
-            className={
-              "rounded-3xl bg-[#16330014] p-4 " + (!locked && !playing ? "opacity-60" : "")
-            }
-          >
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1 truncate pr-3 text-base font-bold text-[#0e0f0c]">
-                {p.name}
-              </div>
-              {!locked && (
-                <button
-                  role="switch"
-                  aria-checked={playing}
-                  onClick={() => onToggle(p)}
-                  className="flex shrink-0 items-center gap-2"
-                >
-                  <span className="text-base font-light text-[#0e0f0c]">Playing</span>
-                  <span
-                    className={
-                      "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
-                      (playing ? "bg-[#34c759]" : "bg-black/20")
-                    }
-                  >
-                    <span
-                      className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
-                      style={{ left: playing ? 22 : 2 }}
-                    />
-                  </span>
-                </button>
-              )}
-            </div>
-            <div className="mt-2 flex gap-3 text-base">
-              <span>
-                <span className="font-bold text-[#0e0f0c]">G: </span>
-                <span className="font-light text-[#0e0f0c]">{goalsOf(p.id)}</span>
-              </span>
-              <span>
-                <span className="font-bold text-[#0e0f0c]">A: </span>
-                <span className="font-light text-[#0e0f0c]">{assistsOf(p.id)}</span>
-              </span>
-            </div>
+          <div key={p.id} className="flex flex-col gap-2 rounded-2xl bg-[#16330014] p-4">
+            <p className="truncate text-2xl font-bold text-[#0e0f0c]">{p.name}</p>
+            <StatRow cells={[["G:", g], ["A:", a], ["G/A:", g + a]]} />
           </div>
         );
       })}
     </div>
   );
 }
+
+function Medals({ medals, nameOf, onEdit }) {
+  const rows = [
+    ["🥇", medals.gold],
+    ["🥈", medals.silver],
+    ["🥉", medals.bronze],
+  ];
+  return (
+    <div className="flex items-center gap-2 rounded-3xl bg-[#16330014] p-4">
+      <div className="min-w-0 flex-1 space-y-1">
+        {rows.map(([emoji, id], i) => (
+          <div key={i} className="flex items-center gap-2 text-base text-[#0e0f0c]">
+            <span>{emoji}</span>
+            <span className="min-w-0 truncate">{nameOf(id)}</span>
+          </div>
+        ))}
+      </div>
+      {onEdit && (
+        <button
+          onClick={onEdit}
+          aria-label="Edit medals"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]"
+        >
+          <MoreHorizontal size={20} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+const BREAK_LABEL = {
+  q1: "End of first quarter",
+  halftime: "Half time",
+  q3: "End of third quarter",
+};
+
+// Ordered CTA stages for a quarters match. Each adds the given break marker;
+// the final stage ends the match.
+const QUARTER_STAGES = [
+  { key: "q1", label: "End first quarter" },
+  { key: "halftime", label: "Half-time" },
+  { key: "q3", label: "End third quarter" },
+];
 
 function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked, heading = true }) {
   if (events.length === 0) return null;
@@ -1623,19 +1613,20 @@ function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked, 
                 )}
               </div>
             );
-          if (e.type === "halftime") {
+          if (e.type === "halftime" || e.type === "period") {
+            const key = e.type === "halftime" ? "halftime" : e.key;
             const homeScore = home ? e.us : e.them;
             const awayScore = home ? e.them : e.us;
             return (
               <div key={e.id} className="flex items-center gap-2 py-4">
                 <span className="min-w-0 flex-1 text-base">
-                  <span className="font-bold text-[#0e0f0c]">Half time: </span>
+                  <span className="font-bold text-[#0e0f0c]">{BREAK_LABEL[key]}: </span>
                   <span className="font-light text-[#0e0f0c]">
                     {homeScore}–{awayScore}
                   </span>
                 </span>
                 {!locked && (
-                  <button onClick={() => onMenu(e)} aria-label="Half-time options" className={iconBtn}>
+                  <button onClick={() => onMenu(e)} aria-label="Period options" className={iconBtn}>
                     <MoreHorizontal size={20} />
                   </button>
                 )}
@@ -1645,7 +1636,7 @@ function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked, 
           return (
             <div key={e.id} className="flex items-center gap-2 py-4">
               <span className="min-w-0 flex-1 text-base font-bold text-[#0e0f0c]">
-                {(opposition || "Opposition").trim()} goal
+                Goal {(opposition || "Opposition").trim()}
               </span>
               {!locked && (
                 <button onClick={() => onMenu(e)} aria-label="Opposition goal options" className={iconBtn}>
@@ -1660,12 +1651,10 @@ function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked, 
   );
 }
 
-function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
+function SaveGoalScreen({ players, initial, onSave, onClose }) {
   const [step, setStep] = useState("scorer");
   const [scorerId, setScorerId] = useState(initial ? initial.scorerId : null);
   const [assistId, setAssistId] = useState(initial ? initial.assistId : null);
-  const [confirmTrash, setConfirmTrash] = useState(false);
-  const editing = !!initial;
 
   const title = step === "scorer" ? "Goalscorer" : "Assist";
   const selectedId = step === "scorer" ? scorerId : assistId;
@@ -1681,12 +1670,8 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
-          <button
-            onClick={() => setConfirmTrash(true)}
-            aria-label={editing ? "Delete goal" : "Discard goal"}
-            className={iconBtn}
-          >
-            <Trash2 size={20} />
+          <button onClick={onClose} aria-label="Close" className={iconBtn}>
+            <X size={20} strokeWidth={2.5} />
           </button>
           <span className="text-base font-bold text-[#0e0f0c]">Goal!</span>
           <button
@@ -1747,23 +1732,6 @@ function SaveGoalScreen({ players, initial, onSave, onDiscard }) {
         </div>
       </div>
 
-      {confirmTrash && (
-        <Modal
-          title={editing ? "Delete this goal?" : "Discard this goal?"}
-          body={
-            editing
-              ? "It's removed from the feed and the score. This can't be undone."
-              : "You'll lose the goalscorer and assist you've picked."
-          }
-          confirmLabel={editing ? "Delete" : "Discard"}
-          danger
-          onCancel={() => setConfirmTrash(false)}
-          onConfirm={() => {
-            setConfirmTrash(false);
-            onDiscard();
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -1774,65 +1742,17 @@ const MEDAL_CATEGORIES = [
   { key: "bronze", label: "🥉 Bronze" },
 ];
 
-function MedalPicker({ players, medals, onChange }) {
-  const rowBtn =
-    "flex w-full items-center gap-3 px-3 py-3 text-left text-base font-bold";
-  const group = "overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]";
-  const radio = (selected) => (
-    <span
-      className={
-        "flex size-5 shrink-0 items-center justify-center rounded-full border-2 " +
-        (selected ? "border-[#163300]" : "border-[#0e0f0c33]")
-      }
-    >
-      {selected && <span className="size-2.5 rounded-full bg-[#163300]" />}
-    </span>
-  );
-  return (
-    <div className="flex flex-col gap-6">
-      {MEDAL_CATEGORIES.map((cat) => (
-        <div key={cat.key} className="flex flex-col gap-2">
-          <label className="text-base font-bold text-black">{cat.label}</label>
-          <div className={group}>
-            <button
-              onClick={() => onChange(cat.key, null)}
-              className={rowBtn + " text-[#454745] active:bg-[#1633001f]"}
-            >
-              <span className="flex-1">No award</span>
-              {radio(!medals[cat.key])}
-            </button>
-            {players.map((p) => {
-              const takenElsewhere = MEDAL_CATEGORIES.some(
-                (o) => o.key !== cat.key && medals[o.key] === p.id
-              );
-              return (
-                <button
-                  key={p.id}
-                  disabled={takenElsewhere}
-                  onClick={() => onChange(cat.key, p.id)}
-                  className={
-                    rowBtn +
-                    (takenElsewhere
-                      ? " text-[#0e0f0c66]"
-                      : " text-[#0e0f0c] active:bg-[#1633001f]")
-                  }
-                >
-                  <span className="flex-1 truncate">{p.name}</span>
-                  {radio(medals[cat.key] === p.id)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function AwardMedalsScreen({ players, initial, onDone }) {
   const empty = { gold: null, silver: null, bronze: null };
   const [medals, setMedals] = useState(initial || empty);
-  const onChange = (key, id) => setMedals((m) => ({ ...m, [key]: id }));
+  const [stepIdx, setStepIdx] = useState(0);
+  const cat = MEDAL_CATEGORIES[stepIdx];
+  const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
+  const pick = (pid) =>
+    setMedals((m) => ({ ...m, [cat.key]: m[cat.key] === pid ? null : pid }));
+
+  const iconBtn =
+    "flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f] disabled:pointer-events-none disabled:opacity-40";
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
@@ -1841,28 +1761,82 @@ function AwardMedalsScreen({ players, initial, onDone }) {
           <button
             onClick={() => onDone(initial || empty)}
             aria-label="Skip"
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
+            className={iconBtn}
           >
             <X size={20} strokeWidth={2.5} />
           </button>
-          <span className="text-base font-bold text-[#0e0f0c]">Medal of the match</span>
+          <span className="text-base font-bold text-[#0e0f0c]">Awards</span>
           <button
             onClick={() => onDone(medals)}
-            aria-label="Continue"
+            aria-label="Save awards"
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
           >
             <Check size={20} strokeWidth={2.5} />
           </button>
         </div>
       </div>
-      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-6 pb-28 pt-4">
-        {players.length === 0 ? (
-          <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
-            No players in the line-up.
-          </p>
-        ) : (
-          <MedalPicker players={players} medals={medals} onChange={onChange} />
-        )}
+
+      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-6 pb-28 pt-2">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
+            disabled={stepIdx === 0}
+            aria-label="Previous medal"
+            className={iconBtn}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <h1 className="text-[34px] font-bold leading-none tracking-tight text-[#0e0f0c]">
+            {cat.label}
+          </h1>
+          <button
+            onClick={() =>
+              setStepIdx((i) => Math.min(MEDAL_CATEGORIES.length - 1, i + 1))
+            }
+            disabled={stepIdx === MEDAL_CATEGORIES.length - 1}
+            aria-label="Next medal"
+            className={iconBtn}
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          {players.length === 0 ? (
+            <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
+              No players in the line-up.
+            </p>
+          ) : (
+            sorted.map((p) => {
+              const selected = medals[cat.key] === p.id;
+              const takenElsewhere = MEDAL_CATEGORIES.some(
+                (o) => o.key !== cat.key && medals[o.key] === p.id
+              );
+              return (
+                <button
+                  key={p.id}
+                  disabled={takenElsewhere}
+                  onClick={() => pick(p.id)}
+                  className={
+                    "flex w-full items-center rounded-3xl p-4 text-left text-base font-bold transition-colors " +
+                    (selected
+                      ? "bg-[#9fe870] text-[#0e0f0c]"
+                      : takenElsewhere
+                      ? "bg-[#16330014] text-[#0e0f0c66]"
+                      : "bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]")
+                  }
+                >
+                  <span className="flex-1 truncate">{p.name}</span>
+                  {takenElsewhere && (
+                    <span className="ml-2 shrink-0 text-xs font-bold text-[#0e0f0c66]">
+                      {MEDAL_CATEGORIES.find((o) => medals[o.key] === p.id).label}
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1875,9 +1849,12 @@ function MatchSetupForm({
   players,
   isPlaying,
   lockedIds,
+  format,
+  showFormat = true,
   onOpposition,
   onDate,
   onHome,
+  onFormat,
   onTogglePlayer,
 }) {
   const locked = lockedIds || new Set();
@@ -1932,6 +1909,36 @@ function MatchSetupForm({
           ))}
         </div>
       </div>
+
+      {showFormat && (
+        <div className="flex flex-col gap-2">
+          <label className="text-base font-bold text-black">Match format</label>
+          <div className={group}>
+            {[
+              { v: "halves", label: "Halves" },
+              { v: "quarters", label: "Quarters" },
+            ].map((o) => (
+              <button
+                key={o.v}
+                onClick={() => onFormat(o.v)}
+                className={rowBtn + " active:bg-[#1633001f]"}
+              >
+                <span className="flex-1">{o.label}</span>
+                <span
+                  className={
+                    "flex size-5 shrink-0 items-center justify-center rounded-full border-2 " +
+                    ((format || "halves") === o.v ? "border-[#163300]" : "border-[#0e0f0c33]")
+                  }
+                >
+                  {(format || "halves") === o.v && (
+                    <span className="size-2.5 rounded-full bg-[#163300]" />
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <label className="text-base font-bold text-black">Available players</label>
@@ -1995,11 +2002,13 @@ function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart }) {
         opposition={live.opposition}
         date={live.date}
         home={live.home}
+        format={live.format}
         players={squad}
         isPlaying={isPlaying}
         onOpposition={(v) => updLive((l) => ({ ...l, opposition: v }))}
         onDate={(v) => updLive((l) => ({ ...l, date: v }))}
         onHome={(v) => updLive((l) => ({ ...l, home: v }))}
+        onFormat={(v) => updLive((l) => ({ ...l, format: v }))}
         onTogglePlayer={onToggle}
       />
       <button
@@ -2017,6 +2026,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
     opposition: l.opposition,
     date: l.date,
     home: l.home,
+    format: l.format || "halves",
     playing: l.playing || {},
   });
   const baseRef = useRef(snap(live));
@@ -2024,6 +2034,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
     opposition: live.opposition,
     date: live.date,
     home: live.home,
+    format: live.format || "halves",
     playing: { ...(live.playing || {}) },
   });
   const [confirmClose, setConfirmClose] = useState(false);
@@ -2062,12 +2073,14 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
           opposition={draft.opposition}
           date={draft.date}
           home={draft.home}
+          format={draft.format}
           players={squad}
           isPlaying={isPlaying}
           lockedIds={lockedIds}
           onOpposition={(v) => setDraft((d) => ({ ...d, opposition: v }))}
           onDate={(v) => setDraft((d) => ({ ...d, date: v }))}
           onHome={(v) => setDraft((d) => ({ ...d, home: v }))}
+          onFormat={(v) => setDraft((d) => ({ ...d, format: v }))}
           onTogglePlayer={(p) =>
             setDraft((d) => ({
               ...d,
@@ -2122,6 +2135,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
               date: today(),
               opposition: "",
               home: true,
+              format: "halves",
               active: false,
               playing: Object.fromEntries(
                 d.roster.filter((p) => p.active).map((p) => [p.id, true])
@@ -2155,6 +2169,11 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const onToggle = (p) =>
     updLive((l) => ({ ...l, playing: { ...l.playing, [p.id]: !isPlaying(p.id) } }));
 
+  const quarters = (live.format || "halves") === "quarters";
+  const hasBreak = (key) =>
+    live.events.some((e) =>
+      key === "halftime" ? e.type === "halftime" : e.type === "period" && e.key === key
+    );
   const halftimeMarker = live.events.find((e) => e.type === "halftime");
 
   const startGame = () =>
@@ -2170,6 +2189,11 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     updLive((l) => ({
       ...l,
       events: [...l.events, { id: uid(), type: "halftime", us, them }],
+    }));
+  const addPeriod = (key) =>
+    updLive((l) => ({
+      ...l,
+      events: [...l.events, { id: uid(), type: "period", key, us, them }],
     }));
   const deleteEvent = (id) =>
     updLive((l) => ({ ...l, events: l.events.filter((e) => e.id !== id) }));
@@ -2206,6 +2230,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
       date: live.date,
       opposition: live.opposition.trim(),
       home: live.home,
+      format: live.format || "halves",
       goals,
       assists,
       oppGoals: them,
@@ -2224,11 +2249,22 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     flash("Match discarded");
   };
 
-  const matchBtn = !live.active
-    ? { label: "Start match", onClick: startGame }
-    : halftimeMarker
-    ? { label: "Full-time", onClick: () => setAwardMedals(true) }
-    : { label: "Half-time", onClick: addHalftime };
+  let matchBtn;
+  if (!live.active) {
+    matchBtn = { label: "Start match", onClick: startGame };
+  } else if (quarters) {
+    const stage = QUARTER_STAGES.find((s) => !hasBreak(s.key));
+    matchBtn = stage
+      ? {
+          label: stage.label,
+          onClick: () => (stage.key === "halftime" ? addHalftime() : addPeriod(stage.key)),
+        }
+      : { label: "Full-time", onClick: () => setAwardMedals(true) };
+  } else {
+    matchBtn = halftimeMarker
+      ? { label: "Full-time", onClick: () => setAwardMedals(true) }
+      : { label: "Half-time", onClick: addHalftime };
+  }
 
   if (awardMedals) {
     const eligible = lineUp
@@ -2261,10 +2297,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         players={pickPlayers}
         initial={initial}
         onSave={saveGoalEvent}
-        onDiscard={() => {
-          if (goalEditor.eventId) deleteEvent(goalEditor.eventId);
-          setGoalEditor(null);
-        }}
+        onClose={() => setGoalEditor(null)}
       />
     );
   }
@@ -2333,6 +2366,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
               opposition: d.opposition,
               date: d.date,
               home: d.home,
+              format: d.format,
               playing: d.playing,
             }));
             setEditSheet(false);
@@ -2356,13 +2390,13 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
       {confirmDelete && (
         <Modal
           title={
-            confirmDelete.type === "halftime"
-              ? "Remove the half-time marker?"
+            confirmDelete.type === "halftime" || confirmDelete.type === "period"
+              ? "Remove this marker?"
               : "Remove this opposition goal?"
           }
           body={
-            confirmDelete.type === "halftime"
-              ? "The half-time button goes back to Half-time."
+            confirmDelete.type === "halftime" || confirmDelete.type === "period"
+              ? "The match button steps back one stage."
               : "It comes off the away score. This can't be undone."
           }
           confirmLabel="Remove"
