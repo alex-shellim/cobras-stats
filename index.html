@@ -1248,7 +1248,6 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
             teamName={teamName}
             opposition={view.opposition}
             home={view.home}
-            heading={false}
             locked={!editable}
             onMenu={(e) => (e.type === "team" ? setGoalMenu(e) : setConfirmDelEvt(e))}
           />
@@ -1584,14 +1583,12 @@ const QUARTER_STAGES = [
   { key: "q3", label: "End third quarter" },
 ];
 
-function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked, heading = true }) {
+function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked }) {
   if (events.length === 0) return null;
   const iconBtn =
     "flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]";
   return (
-    <div className="space-y-3">
-      {heading && <p className="text-base font-bold text-[#0e0f0c]">Goal feed</p>}
-      <div className="divide-y divide-black/20 rounded-3xl bg-[#16330014] px-4">
+    <div className="divide-y divide-black/20 rounded-3xl bg-[#16330014] px-4">
         {[...events].reverse().map((e) => {
           if (e.type === "team")
             return (
@@ -1658,7 +1655,6 @@ function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked, 
             </div>
           );
         })}
-      </div>
     </div>
   );
 }
