@@ -1904,6 +1904,8 @@ function MatchSetupForm({
   tournament,
   format,
   showFormat = true,
+  showDetails = true,
+  showPlayers = true,
   onOpposition,
   onDate,
   onHome,
@@ -1919,6 +1921,8 @@ function MatchSetupForm({
     "overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]";
   return (
     <div className="flex flex-col gap-6">
+      {showDetails && (
+      <React.Fragment>
       <div className="flex flex-col gap-2">
         <label className="text-base font-bold text-black">Opposition (optional)</label>
         <input
@@ -2036,6 +2040,10 @@ function MatchSetupForm({
         </div>
       )}
 
+      </React.Fragment>
+      )}
+
+      {showPlayers && (
       <div className="flex flex-col gap-2">
         <label className="text-base font-bold text-black">Available players</label>
         {players.length === 0 ? (
@@ -2087,13 +2095,36 @@ function MatchSetupForm({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
 
-function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart }) {
+function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart, onCancel }) {
+  const [step, setStep] = useState("details");
+  const onLineup = step === "lineup";
+
   return (
-    <div className="flex flex-col gap-6">
+    <div>
+      <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-4 pb-4 pt-6">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onLineup ? () => setStep("details") : onCancel}
+            aria-label={onLineup ? "Back" : "Close"}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
+          >
+            {onLineup ? <ChevronLeft size={20} strokeWidth={2.5} /> : <X size={20} strokeWidth={2.5} />}
+          </button>
+          <span className="text-base font-bold text-[#0e0f0c]">Match details</span>
+          <button
+            onClick={onLineup ? onStart : () => setStep("lineup")}
+            aria-label={onLineup ? "Start match" : "Next"}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
+          >
+            <Check size={20} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
       <MatchSetupForm
         opposition={live.opposition}
         date={live.date}
@@ -2103,6 +2134,8 @@ function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart }) {
         format={live.format}
         players={squad}
         isPlaying={isPlaying}
+        showDetails={!onLineup}
+        showPlayers={onLineup}
         onOpposition={(v) => updLive((l) => ({ ...l, opposition: v }))}
         onDate={(v) => updLive((l) => ({ ...l, date: v }))}
         onHome={(v) => updLive((l) => ({ ...l, home: v }))}
@@ -2113,12 +2146,6 @@ function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart }) {
         onFormat={(v) => updLive((l) => ({ ...l, format: v }))}
         onTogglePlayer={onToggle}
       />
-      <button
-        onClick={onStart}
-        className="h-11 w-full rounded-full bg-[#9fe870] text-base font-bold text-[#163300] active:bg-[#8fd95f]"
-      >
-        Start match
-      </button>
     </div>
   );
 }
@@ -2433,6 +2460,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         isPlaying={isPlaying}
         onToggle={onToggle}
         onStart={startGame}
+        onCancel={() => setData((d) => ({ ...d, live: null }))}
       />
     );
   }
