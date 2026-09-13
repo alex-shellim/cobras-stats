@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js"></script>
   <script>
     // Force the CLASSIC JSX runtime so Babel emits React.createElement(...)
     // instead of injecting an ES `import` for the automatic runtime (which
@@ -1081,8 +1082,6 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
   const us = teamEv.length;
   const them = view.events.filter((e) => e.type === "opp").length;
   const s = sides(teamName, view.opposition, us, them, view.home);
-  const goalsOf = (pid) => teamEv.filter((e) => e.scorerId === pid).length;
-  const assistsOf = (pid) => teamEv.filter((e) => e.assistId === pid).length;
   const lineUp = roster.filter(
     (p) =>
       p.active ||
@@ -1254,63 +1253,65 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
         <Segmented
           tab={tab}
           setTab={setTab}
-          secondLabel={editable ? "Details" : "Line-up"}
+          firstLabel={editable ? "Match" : "Summary"}
+          secondLabel={editable ? "Details" : "Live"}
         />
 
-        {tab === "match" && (
-          <>
-            {!editable && (
-              <p className="text-base font-medium text-[#454745]">
-                {fmtDate(view.date, true)}
-              </p>
-            )}
-            <LiveScore
-              live={view}
-              teamName={teamName}
-              us={us}
-              them={them}
-              locked={!editable}
-              showSwap={false}
-              plusDisabled={false}
-              onOurGoal={() => setGoalEditor({})}
-              onOppGoal={addOppGoal}
-            />
-          </>
+        {editable && tab === "match" && (
+          <LiveScore
+            live={view}
+            teamName={teamName}
+            us={us}
+            them={them}
+            locked={false}
+            showSwap={false}
+            plusDisabled={false}
+            onOurGoal={() => setGoalEditor({})}
+            onOppGoal={addOppGoal}
+          />
         )}
       </div>
 
       {tab === "match" ? (
-        <div className="space-y-4">
-          <GoalFeed
-            events={view.events}
-            nameOf={nameOf}
-            teamName={teamName}
-            opposition={view.opposition}
-            home={view.home}
-            locked={!editable}
-            onMenu={(e) => (e.type === "team" ? setGoalMenu(e) : setConfirmDelEvt(e))}
-          />
-          {view.events.length === 0 && (
-            <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
-              No goals recorded.
-            </p>
-          )}
+        editable ? (
+          <div className="space-y-4">
+            <GoalFeed
+              events={view.events}
+              nameOf={nameOf}
+              teamName={teamName}
+              opposition={view.opposition}
+              home={view.home}
+              locked={false}
+              onMenu={(e) => (e.type === "team" ? setGoalMenu(e) : setConfirmDelEvt(e))}
+            />
+            {view.events.length === 0 && (
+              <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
+                No goals recorded.
+              </p>
+            )}
 
-          <Medals
-            medals={view.medals}
-            nameOf={nameOf}
-            onEdit={editable ? () => setMedalEditor(true) : undefined}
-          />
+            <Medals medals={view.medals} nameOf={nameOf} onEdit={() => setMedalEditor(true)} />
 
-          {editable && (
             <button
               onClick={() => setConfirmDelMatch(true)}
               className="h-11 w-full rounded-full bg-[#16330014] text-base font-bold text-[#454745] active:bg-[#1633001f]"
             >
               Delete match
             </button>
-          )}
-        </div>
+          </div>
+        ) : (
+          <MatchCard
+            s={s}
+            date={view.date}
+            type={view.type}
+            events={view.events}
+            teamEv={teamEv}
+            home={view.home}
+            medals={view.medals}
+            nameOf={nameOf}
+            flash={flash}
+          />
+        )
       ) : editable ? (
         <MatchSetupForm
           opposition={view.opposition}
@@ -1333,7 +1334,22 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           onTogglePlayer={onToggle}
         />
       ) : (
-        <LineUpTab players={lineUp} goalsOf={goalsOf} assistsOf={assistsOf} />
+        <div className="space-y-4">
+          <GoalFeed
+            events={view.events}
+            nameOf={nameOf}
+            teamName={teamName}
+            opposition={view.opposition}
+            home={view.home}
+            locked
+            onMenu={() => {}}
+          />
+          {view.events.length === 0 && (
+            <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
+              No goals recorded.
+            </p>
+          )}
+        </div>
       )}
 
       {confirmClose && (
@@ -1459,7 +1475,7 @@ function Section({ title, children }) {
 
 // ---------- Live ----------
 
-function Segmented({ tab, setTab, secondLabel = "Line-up" }) {
+function Segmented({ tab, setTab, firstLabel = "Match", secondLabel = "Line-up" }) {
   const opt = (id, label) => {
     const on = tab === id;
     return (
@@ -1477,7 +1493,7 @@ function Segmented({ tab, setTab, secondLabel = "Line-up" }) {
   };
   return (
     <div className="flex w-full items-center gap-1 rounded-full bg-[#16330014] p-0.5">
-      {opt("match", "Match")}
+      {opt("match", firstLabel)}
       {opt("lineup", secondLabel)}
     </div>
   );
@@ -1559,30 +1575,6 @@ function LiveScore({ live, teamName, us, them, onSwap, onNameTap, onOurGoal, onO
   );
 }
 
-function LineUpTab({ players, goalsOf, assistsOf }) {
-  const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
-  if (players.length === 0)
-    return (
-      <p className="rounded-3xl bg-[#16330014] p-4 text-sm text-[#454745]">
-        No line-up recorded.
-      </p>
-    );
-  return (
-    <div className="space-y-4">
-      {sorted.map((p) => {
-        const g = goalsOf(p.id);
-        const a = assistsOf(p.id);
-        return (
-          <div key={p.id} className="flex flex-col gap-2 rounded-2xl bg-[#16330014] p-4">
-            <p className="truncate text-2xl font-bold text-[#0e0f0c]">{p.name}</p>
-            <StatRow cells={[["G:", g], ["A:", a], ["G/A:", g + a]]} />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function Medals({ medals, nameOf, onEdit }) {
   const rows = [
     ["🥇", medals.gold],
@@ -1607,6 +1599,309 @@ function Medals({ medals, nameOf, onEdit }) {
         >
           <MoreHorizontal size={20} />
         </button>
+      )}
+    </div>
+  );
+}
+
+// Groups a team event field (scorerId/assistId) into ordered, deduped names,
+// appending "(N)" when a player did it more than once.
+function summarizeEvents(events, key, nameOf) {
+  const order = [];
+  const counts = {};
+  events.forEach((e) => {
+    const id = e[key];
+    if (!id) return;
+    if (!(id in counts)) {
+      counts[id] = 0;
+      order.push(id);
+    }
+    counts[id] += 1;
+  });
+  return order.map((id) => (counts[id] > 1 ? `${nameOf(id)} (${counts[id]})` : nameOf(id)));
+}
+
+// Renders a DOM node to a PNG blob for sharing. Captured at whatever CSS
+// width the node itself is styled to (see MatchCard's offscreen export
+// clone, fixed at 360px) and upscaled via `pixelRatio` for a crisp,
+// retina-ready image; height always matches the node's natural rendered
+// height. Uses html-to-image (an SVG-foreignObject renderer, i.e. the real
+// browser lays out and paints the text) rather than html2canvas, which
+// reimplements text metrics itself and was clipping, misaligning and
+// unevenly spacing text compared to how the card actually renders on screen.
+async function exportCardImage(node) {
+  const blob = await htmlToImage.toBlob(node, { pixelRatio: 3 });
+  if (!blob) throw new Error("toBlob failed");
+  return blob;
+}
+
+function Divider() {
+  return <div className="h-px w-full shrink-0 bg-white/20" />;
+}
+
+function MatchCardFace({ s, date, type, htLabel, goals, assists, awards, nameOf }) {
+  const statSections = [];
+  if (goals.length > 0) {
+    statSections.push(
+      <div key="goals" className="flex flex-col gap-1">
+        <p className="text-base font-bold leading-[normal] text-white">Goals</p>
+        <p className="text-base font-light leading-[normal] text-white">{goals.join(", ")}</p>
+      </div>
+    );
+  }
+  if (assists.length > 0) {
+    statSections.push(
+      <div key="assists" className="flex flex-col gap-1">
+        <p className="text-base font-bold leading-[normal] text-white">Assists</p>
+        <p className="text-base font-light leading-[normal] text-white">{assists.join(", ")}</p>
+      </div>
+    );
+  }
+  statSections.push(
+    <div key="awards" className="flex flex-col gap-1">
+      <p className="text-base font-bold leading-[normal] text-white">Awards</p>
+      <div className="flex flex-wrap items-center gap-[3px]">
+        {awards.map(([emoji, id], i) => (
+          <span key={i} className="flex items-center gap-1 text-base font-light leading-[normal] text-white">
+            <span>{emoji}</span>
+            <span className="min-w-0 truncate">{nameOf(id)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-base font-light leading-[normal] text-white">{fmtDate(date, true)}</span>
+        {type && (
+          <span className="flex shrink-0 items-center whitespace-nowrap rounded-2xl bg-black/40 px-2 py-[5px] text-xs font-bold capitalize leading-[normal] text-white">
+            {type}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-2 border-t border-white/20 pt-4">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-0.5">
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+              <p className="min-w-0 flex-1 truncate text-right text-base font-bold leading-[normal] text-white">{s.l}</p>
+              <p className="shrink-0 whitespace-nowrap text-[42px] font-bold leading-none text-white">{s.ls}</p>
+            </div>
+            <div className="h-[6px] w-3 shrink-0 rounded-sm bg-white" />
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <p className="shrink-0 whitespace-nowrap text-[42px] font-bold leading-none text-white">{s.rs}</p>
+              <p className="min-w-0 flex-1 truncate text-base font-bold leading-[normal] text-white">{s.r}</p>
+            </div>
+          </div>
+          {htLabel && (
+            <p className="text-center text-base font-light leading-[normal] text-white">{htLabel}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-4 rounded-2xl bg-black/40 p-4">
+        {statSections.map((section, i) => (
+          <React.Fragment key={section.key}>
+            {i > 0 && <Divider />}
+            {section}
+          </React.Fragment>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ShareSheet({ status, onCopy, onSave, onRetry, onCancel, canCopy }) {
+  const ready = status === "ready";
+  const rendering = status === "rendering";
+  const failed = status === "error";
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+      style={{ backgroundColor: "rgba(15,23,42,0.45)" }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+        <h3 className="text-base font-semibold text-slate-900">Share match card</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          {failed
+            ? "Couldn't create the image — try again."
+            : rendering
+            ? "Preparing image…"
+            : "Export this card as an image to copy or save."}
+        </p>
+        <div className="mt-5 flex flex-col gap-2">
+          {failed ? (
+            <button
+              onClick={onRetry}
+              className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white active:bg-emerald-700"
+            >
+              Try again
+            </button>
+          ) : (
+            <>
+              {canCopy && (
+                <button
+                  onClick={onCopy}
+                  disabled={!ready}
+                  className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white active:bg-emerald-700 disabled:opacity-50"
+                >
+                  Copy image
+                </button>
+              )}
+              <button
+                onClick={onSave}
+                disabled={!ready}
+                className={
+                  "w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-50 " +
+                  (canCopy
+                    ? "border border-slate-200 text-slate-700 active:bg-slate-50"
+                    : "bg-emerald-600 text-white active:bg-emerald-700")
+                }
+              >
+                Save image
+              </button>
+            </>
+          )}
+          <button
+            onClick={onCancel}
+            className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 active:bg-slate-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MatchCard({ s, date, type, events, teamEv, home, medals, nameOf, flash }) {
+  const goals = summarizeEvents(teamEv, "scorerId", nameOf);
+  const assists = summarizeEvents(teamEv, "assistId", nameOf);
+  const awards = [
+    ["🥇", medals.gold],
+    ["🥈", medals.silver],
+    ["🥉", medals.bronze],
+  ];
+  const halftime = events.find((e) => e.type === "halftime");
+  const htLabel = halftime
+    ? `HT: ${home ? halftime.us : halftime.them}–${home ? halftime.them : halftime.us}`
+    : null;
+
+  const exportRef = useRef(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [status, setStatus] = useState("idle"); // idle | rendering | ready | error
+  const [imgBlob, setImgBlob] = useState(null);
+  const canCopy = typeof window !== "undefined" && !!(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write);
+
+  const renderImage = async () => {
+    setStatus("rendering");
+    setImgBlob(null);
+    try {
+      const blob = await exportCardImage(exportRef.current);
+      setImgBlob(blob);
+      setStatus("ready");
+    } catch (e) {
+      setStatus("error");
+    }
+  };
+
+  const onShare = () => {
+    setShareOpen(true);
+    renderImage();
+  };
+
+  const closeShare = () => {
+    setShareOpen(false);
+    setImgBlob(null);
+    setStatus("idle");
+  };
+
+  const fileName =
+    `${s.l}-vs-${s.r}-${date}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") + ".png";
+
+  const copyImage = async () => {
+    if (!imgBlob) return;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": imgBlob })]);
+      flash("Copied image");
+      closeShare();
+    } catch (e) {
+      flash("Couldn't copy image");
+    }
+  };
+
+  const saveImage = () => {
+    if (!imgBlob) return;
+    const url = URL.createObjectURL(imgBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    closeShare();
+  };
+
+  return (
+    <div className="rounded-3xl bg-[#163300] p-4">
+      <MatchCardFace
+        s={s}
+        date={date}
+        type={type}
+        htLabel={htLabel}
+        goals={goals}
+        assists={assists}
+        awards={awards}
+        nameOf={nameOf}
+      />
+
+      <button
+        onClick={onShare}
+        className="mt-4 h-11 w-full rounded-full bg-[#e2f6d5] text-base font-bold text-[#163300] active:bg-[#d3efc0]"
+      >
+        Share
+      </button>
+
+      {/* Offscreen fixed-width (360px) copy of the card, minus this Share
+          button — used purely as the source exportCardImage captures for
+          export, so the shared image is a consistent size regardless of
+          the viewport the card is actually being viewed at. The off-screen
+          positioning lives on this outer wrapper only: exportCardImage
+          serializes the captured node's own styles into an SVG
+          foreignObject, and a `position: fixed; left: -10000px` on the
+          captured node itself would carry into that foreignObject's own
+          coordinate space and render the content outside the captured
+          viewport (an all-transparent "successful" export). */}
+      <div aria-hidden="true" className="pointer-events-none" style={{ position: "fixed", top: 0, left: "-10000px" }}>
+        <div ref={exportRef} className="rounded-3xl bg-[#163300] p-4" style={{ width: 360 }}>
+          <MatchCardFace
+            s={s}
+            date={date}
+            type={type}
+            htLabel={htLabel}
+            goals={goals}
+            assists={assists}
+            awards={awards}
+            nameOf={nameOf}
+          />
+        </div>
+      </div>
+
+      {shareOpen && (
+        <ShareSheet
+          status={status}
+          onCopy={copyImage}
+          onSave={saveImage}
+          onRetry={renderImage}
+          onCancel={closeShare}
+          canCopy={canCopy}
+        />
       )}
     </div>
   );
