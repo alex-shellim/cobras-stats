@@ -1835,9 +1835,8 @@ function MatchCard({ s, date, type, events, teamEv, home, medals, nameOf, flash 
     }
   };
 
-  const saveImage = () => {
-    if (!imgBlob) return;
-    const url = URL.createObjectURL(imgBlob);
+  const downloadBlob = (blob) => {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = fileName;
@@ -1845,6 +1844,29 @@ function MatchCard({ s, date, type, events, teamEv, home, medals, nameOf, flash 
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+
+  // iOS Safari's `<a download>` doesn't save into Photos — it just opens the
+  // image in a new tab, with no "Save to Camera Roll" affordance. The Web
+  // Share API's file support is what actually gets you there: sharing a
+  // File opens the native share sheet, and "Save Image" on it saves to
+  // Photos. Feature-detect per file (canShare wants the real File, not just
+  // a type check) and only fall back to the plain download where that API
+  // isn't available at all (most desktop browsers), so desktop keeps a
+  // one-tap save straight to Downloads.
+  const saveImage = async () => {
+    if (!imgBlob) return;
+    const file = new File([imgBlob], fileName, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+      } catch (e) {
+        if (e && e.name !== "AbortError") downloadBlob(imgBlob);
+      }
+      closeShare();
+      return;
+    }
+    downloadBlob(imgBlob);
     closeShare();
   };
 
