@@ -1374,7 +1374,9 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
       {confirmDelEvt && (
         <Modal
           title={
-            confirmDelEvt.type === "halftime" || confirmDelEvt.type === "period"
+            confirmDelEvt.type === "halftime" ||
+            confirmDelEvt.type === "period" ||
+            confirmDelEvt.type === "fulltime"
               ? "Remove this marker?"
               : "Remove this opposition goal?"
           }
@@ -1933,6 +1935,7 @@ const BREAK_LABEL = {
   q1: "End of first quarter",
   halftime: "Half time",
   q3: "End of third quarter",
+  fulltime: "Full-time",
 };
 
 // Ordered CTA stages for a quarters match. Each adds the given break marker;
@@ -1982,8 +1985,8 @@ function GoalFeed({ events, nameOf, teamName, opposition, home, onMenu, locked }
                 )}
               </div>
             );
-          if (e.type === "halftime" || e.type === "period") {
-            const key = e.type === "halftime" ? "halftime" : e.key;
+          if (e.type === "halftime" || e.type === "period" || e.type === "fulltime") {
+            const key = e.type === "period" ? e.key : e.type;
             const homeScore = home ? e.us : e.them;
             const awayScore = home ? e.them : e.us;
             return (
@@ -2573,8 +2576,8 @@ function LiveEmpty({ onStart }) {
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center gap-2 px-6 text-center">
       <SoccerballGlyph size={40} className="mb-2 text-[#0e0f0c]" />
-      <h2 className="text-2xl font-bold text-[#0e0f0c]">No live game</h2>
-      <p className="text-base font-light text-[#454745]">Set up a game to get started</p>
+      <h2 className="text-2xl font-bold text-[#0e0f0c]">No live match</h2>
+      <p className="text-base font-light text-[#454745]">Set up a match to get started</p>
       <button
         onClick={onStart}
         className="mt-4 h-11 w-full max-w-xs rounded-full bg-[#9fe870] text-base font-bold text-[#163300] active:bg-[#8fd95f]"
@@ -2639,6 +2642,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
       key === "halftime" ? e.type === "halftime" : e.type === "period" && e.key === key
     );
   const halftimeMarker = live.events.find((e) => e.type === "halftime");
+  const fulltimeMarker = live.events.find((e) => e.type === "fulltime");
 
   const startGame = () =>
     updLive((l) => ({
@@ -2658,6 +2662,11 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     updLive((l) => ({
       ...l,
       events: [...l.events, { id: uid(), type: "period", key, us, them }],
+    }));
+  const addFulltime = () =>
+    updLive((l) => ({
+      ...l,
+      events: [...l.events, { id: uid(), type: "fulltime", us, them }],
     }));
   const deleteEvent = (id) =>
     updLive((l) => ({ ...l, events: l.events.filter((e) => e.id !== id) }));
@@ -2718,6 +2727,8 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   let matchBtn;
   if (!live.active) {
     matchBtn = { label: "Start match", onClick: startGame };
+  } else if (fulltimeMarker) {
+    matchBtn = { label: "Save match", primary: true, onClick: () => setAwardMedals(true) };
   } else if (quarters) {
     const stage = QUARTER_STAGES.find((s) => !hasBreak(s.key));
     matchBtn = stage
@@ -2725,10 +2736,10 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           label: stage.label,
           onClick: () => (stage.key === "halftime" ? addHalftime() : addPeriod(stage.key)),
         }
-      : { label: "Full-time", onClick: () => setAwardMedals(true) };
+      : { label: "Full-time", onClick: addFulltime };
   } else {
     matchBtn = halftimeMarker
-      ? { label: "Full-time", onClick: () => setAwardMedals(true) }
+      ? { label: "Full-time", onClick: addFulltime }
       : { label: "Half-time", onClick: addHalftime };
   }
 
@@ -2798,7 +2809,12 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         <div className="flex items-center gap-2">
           <button
             onClick={matchBtn.onClick}
-            className="h-11 flex-1 rounded-full bg-[#16330014] text-base font-bold text-[#454745] active:bg-[#1633001f]"
+            className={
+              "h-11 flex-1 rounded-full text-base font-bold " +
+              (matchBtn.primary
+                ? "bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
+                : "bg-[#16330014] text-[#454745] active:bg-[#1633001f]")
+            }
           >
             {matchBtn.label}
           </button>
@@ -2859,12 +2875,16 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
       {confirmDelete && (
         <Modal
           title={
-            confirmDelete.type === "halftime" || confirmDelete.type === "period"
+            confirmDelete.type === "halftime" ||
+            confirmDelete.type === "period" ||
+            confirmDelete.type === "fulltime"
               ? "Remove this marker?"
               : "Remove this opposition goal?"
           }
           body={
-            confirmDelete.type === "halftime" || confirmDelete.type === "period"
+            confirmDelete.type === "halftime" ||
+            confirmDelete.type === "period" ||
+            confirmDelete.type === "fulltime"
               ? "The match button steps back one stage."
               : "It comes off the away score. This can't be undone."
           }
