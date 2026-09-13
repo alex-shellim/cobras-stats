@@ -1205,6 +1205,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           updDraft((d) => ({ ...d, medals }));
           setMedalEditor(false);
         }}
+        onCancel={() => setMedalEditor(false)}
       />
     );
   }
@@ -2031,8 +2032,13 @@ function SaveGoalScreen({ players, initial, onSave, onClose }) {
   const selectedId = step === "scorer" ? scorerId : assistId;
   const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
   const pick = (pid) => {
-    if (step === "scorer") setScorerId((c) => (c === pid ? null : pid));
-    else setAssistId((c) => (c === pid ? null : pid));
+    if (step === "scorer") {
+      const next = scorerId === pid ? null : pid;
+      setScorerId(next);
+      if (next !== null) setStep("assist");
+    } else {
+      setAssistId((c) => (c === pid ? null : pid));
+    }
   };
   const iconBtn =
     "flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f] disabled:pointer-events-none disabled:opacity-40";
@@ -2041,9 +2047,15 @@ function SaveGoalScreen({ players, initial, onSave, onClose }) {
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
-          <button onClick={onClose} aria-label="Close" className={iconBtn}>
-            <X size={20} strokeWidth={2.5} />
-          </button>
+          {step === "scorer" ? (
+            <button onClick={onClose} aria-label="Close" className={iconBtn}>
+              <X size={20} strokeWidth={2.5} />
+            </button>
+          ) : (
+            <button onClick={() => setStep("scorer")} aria-label="Back" className={iconBtn}>
+              <ChevronLeft size={20} />
+            </button>
+          )}
           <span className="text-base font-bold text-[#0e0f0c]">Goal!</span>
           <button
             onClick={() => onSave({ scorerId, assistId })}
@@ -2055,28 +2067,10 @@ function SaveGoalScreen({ players, initial, onSave, onClose }) {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-6 pb-28 pt-2">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => setStep("scorer")}
-            disabled={step === "scorer"}
-            aria-label="Goalscorer"
-            className={iconBtn}
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <h1 className="text-[34px] font-bold leading-none tracking-tight text-[#0e0f0c]">
-            {title}
-          </h1>
-          <button
-            onClick={() => setStep("assist")}
-            disabled={step === "assist"}
-            aria-label="Assist"
-            className={iconBtn}
-          >
-            <ChevronRight size={20} />
-          </button>
-        </div>
+      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto p-6">
+        <h1 className="text-[34px] font-bold leading-none tracking-tight text-[#0e0f0c]">
+          {title}
+        </h1>
 
         <div className="mt-4 space-y-4">
           {players.length === 0 ? (
@@ -2113,14 +2107,19 @@ const MEDAL_CATEGORIES = [
   { key: "bronze", label: "🥉 Bronze" },
 ];
 
-function AwardMedalsScreen({ players, initial, onDone }) {
+function AwardMedalsScreen({ players, initial, onDone, onCancel }) {
   const empty = { gold: null, silver: null, bronze: null };
   const [medals, setMedals] = useState(initial || empty);
   const [stepIdx, setStepIdx] = useState(0);
   const cat = MEDAL_CATEGORIES[stepIdx];
   const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
-  const pick = (pid) =>
-    setMedals((m) => ({ ...m, [cat.key]: m[cat.key] === pid ? null : pid }));
+  const pick = (pid) => {
+    const next = medals[cat.key] === pid ? null : pid;
+    setMedals((m) => ({ ...m, [cat.key]: next }));
+    if (next !== null && stepIdx < MEDAL_CATEGORIES.length - 1) {
+      setStepIdx((i) => i + 1);
+    }
+  };
 
   const iconBtn =
     "flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f] disabled:pointer-events-none disabled:opacity-40";
@@ -2129,13 +2128,19 @@ function AwardMedalsScreen({ players, initial, onDone }) {
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
-          <button
-            onClick={() => onDone(initial || empty)}
-            aria-label="Skip"
-            className={iconBtn}
-          >
-            <X size={20} strokeWidth={2.5} />
-          </button>
+          {stepIdx === 0 ? (
+            <button onClick={onCancel} aria-label="Close" className={iconBtn}>
+              <X size={20} strokeWidth={2.5} />
+            </button>
+          ) : (
+            <button
+              onClick={() => setStepIdx((i) => i - 1)}
+              aria-label="Back"
+              className={iconBtn}
+            >
+              <ChevronLeft size={20} />
+            </button>
+          )}
           <span className="text-base font-bold text-[#0e0f0c]">Awards</span>
           <button
             onClick={() => onDone(medals)}
@@ -2147,30 +2152,10 @@ function AwardMedalsScreen({ players, initial, onDone }) {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-6 pb-28 pt-2">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
-            disabled={stepIdx === 0}
-            aria-label="Previous medal"
-            className={iconBtn}
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <h1 className="text-[34px] font-bold leading-none tracking-tight text-[#0e0f0c]">
-            {cat.label}
-          </h1>
-          <button
-            onClick={() =>
-              setStepIdx((i) => Math.min(MEDAL_CATEGORIES.length - 1, i + 1))
-            }
-            disabled={stepIdx === MEDAL_CATEGORIES.length - 1}
-            aria-label="Next medal"
-            className={iconBtn}
-          >
-            <ChevronRight size={20} />
-          </button>
-        </div>
+      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto p-6">
+        <h1 className="text-[34px] font-bold leading-none tracking-tight text-[#0e0f0c]">
+          {cat.label}
+        </h1>
 
         <div className="mt-4 space-y-4">
           {players.length === 0 ? (
@@ -2756,6 +2741,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           setAwardMedals(false);
           setConfirmEnd(true);
         }}
+        onCancel={() => setAwardMedals(false)}
       />
     );
   }
