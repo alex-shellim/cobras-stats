@@ -89,7 +89,14 @@ try {
 const normalizeLive = (l) => {
   if (!l) return null;
   if (Array.isArray(l.events))
-    return { active: l.active !== false, format: "halves", type: null, tournament: "", ...l };
+    return {
+      active: l.active !== false,
+      ready: l.active !== false,
+      format: "halves",
+      type: null,
+      tournament: "",
+      ...l,
+    };
   const events = [];
   Object.entries(l.goals || {}).forEach(([pid, n]) => {
     for (let i = 0; i < n; i++)
@@ -105,6 +112,7 @@ const normalizeLive = (l) => {
     tournament: l.tournament || "",
     playing: l.playing || {},
     active: true,
+    ready: true,
     events,
   };
 };
@@ -2423,7 +2431,7 @@ function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart, onC
           <span className="text-base font-bold text-[#0e0f0c]">Match details</span>
           <button
             onClick={onLineup ? onStart : () => setStep("lineup")}
-            aria-label={onLineup ? "Start match" : "Next"}
+            aria-label={onLineup ? "Done" : "Next"}
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
           >
             <Check size={20} strokeWidth={2.5} />
@@ -2578,6 +2586,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const [goalEditor, setGoalEditor] = useState(null);
   const [awardMedals, setAwardMedals] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [confirmDiscardSetup, setConfirmDiscardSetup] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [goalMenu, setGoalMenu] = useState(null);
   const { live } = data;
@@ -2595,6 +2604,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         tournament: "",
         format: "halves",
         active: false,
+        ready: false,
         playing: Object.fromEntries(
           d.roster.filter((p) => p.active).map((p) => [p.id, true])
         ),
@@ -2629,12 +2639,17 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const halftimeMarker = live.events.find((e) => e.type === "halftime");
   const fulltimeMarker = live.events.find((e) => e.type === "fulltime");
 
-  const startGame = () =>
+  // Finishing the setup form (Lineup step's checkmark) moves the user into
+  // the live match view, but doesn't start the match yet — that's a
+  // separate, explicit Kick-off tap on the same button that later cycles
+  // through the half-time/full-time stages.
+  const finishSetup = () =>
     updLive((l) => ({
       ...l,
-      active: true,
+      ready: true,
       opposition: l.opposition.trim() || "Opposition",
     }));
+  const kickOff = () => updLive((l) => ({ ...l, active: true }));
   const addOurGoal = () => setGoalEditor({});
   const addOppGoal = () =>
     updLive((l) => ({ ...l, events: [...l.events, { id: uid(), type: "opp" }] }));
@@ -2711,7 +2726,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
 
   let matchBtn;
   if (!live.active) {
-    matchBtn = { label: "Start match", onClick: startGame };
+    matchBtn = { label: "Kick-off", primary: true, onClick: kickOff };
   } else if (fulltimeMarker) {
     matchBtn = { label: "Save match", primary: true, onClick: () => setAwardMedals(true) };
   } else if (quarters) {
@@ -2765,7 +2780,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     );
   }
 
-  if (!live.active) {
+  if (!live.ready) {
     return (
       <PreMatchSetup
         live={live}
@@ -2773,7 +2788,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         squad={squadSorted}
         isPlaying={isPlaying}
         onToggle={onToggle}
-        onStart={startGame}
+        onStart={finishSetup}
         onCancel={() => setData((d) => ({ ...d, live: null }))}
       />
     );
@@ -2790,7 +2805,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           onOurGoal={addOurGoal}
           onOppGoal={addOppGoal}
           showSwap={false}
-          plusDisabled={false}
+          plusDisabled={!live.active}
         />
         <div className="flex items-center gap-2">
           <button
@@ -2813,6 +2828,15 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           </button>
         </div>
       </div>
+
+      {!live.active && (
+        <button
+          onClick={() => setConfirmDiscardSetup(true)}
+          className="mb-4 h-11 w-full rounded-full bg-[#16330014] text-base font-bold text-[#454745] active:bg-[#1633001f]"
+        >
+          Discard match
+        </button>
+      )}
 
       <GoalFeed
         events={live.events}
@@ -2855,6 +2879,17 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           onConfirm={end}
           onSecondary={discard}
           onCancel={() => setConfirmEnd(false)}
+        />
+      )}
+
+      {confirmDiscardSetup && (
+        <Modal
+          title="Discard this match?"
+          body="Everything entered so far — line-up, format, opposition — is thrown away. This can't be undone."
+          confirmLabel="Discard"
+          danger
+          onConfirm={discard}
+          onCancel={() => setConfirmDiscardSetup(false)}
         />
       )}
 
