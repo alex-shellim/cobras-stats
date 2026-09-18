@@ -121,7 +121,8 @@ const normalize = (d) => ({
   teamName: d && typeof d.teamName === "string" ? d.teamName : TEAM_NAME,
   roster: Array.isArray(d && d.roster) ? d.roster : [],
   matches: Array.isArray(d && d.matches) ? d.matches : [],
-  live: normalizeLive(d && d.live)
+  live: normalizeLive(d && d.live),
+  tournament: d && d.tournament && typeof d.tournament === "object" ? d.tournament : null,
 });
 
 function Svg({ size = 20, strokeWidth = 2, className, children }) {
@@ -210,6 +211,7 @@ const seed = () => ({
   roster: SQUAD.map((name) => ({ id: uid(), name, active: true })),
   matches: [],
   live: null,
+  tournament: null,
 });
 
 function fmtDate(iso, long = false) {
@@ -920,7 +922,10 @@ const RESULT_FILTERS = [
 function Matches({ data, setData, nameOf, roster, teamName, flash }) {
   const [openId, setOpenId] = useState(null);
   const [filter, setFilter] = useState("all");
-  const { matches } = data;
+  const [groupMenu, setGroupMenu] = useState(null);
+  const [editTournament, setEditTournament] = useState(null);
+  const [confirmDeleteTournament, setConfirmDeleteTournament] = useState(null);
+  const { matches, tournament } = data;
   const match = matches.find((m) => m.id === openId);
 
   if (match) {
@@ -937,8 +942,40 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
     );
   }
 
+  if (editTournament) {
+    const groupMatches = matches.filter((m) => m.tournament === editTournament);
+    const currentDate =
+      tournament && tournament.name === editTournament ? tournament.date : groupMatches[0]?.date;
+    return (
+      <EditTournament
+        name={editTournament}
+        date={currentDate}
+        onCancel={() => setEditTournament(null)}
+        onSave={({ name, date }) => {
+          setData((d) => ({
+            ...d,
+            tournament:
+              d.tournament && d.tournament.name === editTournament
+                ? { ...d.tournament, name, date }
+                : d.tournament,
+            matches: d.matches.map((m) =>
+              m.tournament === editTournament ? { ...m, tournament: name, date } : m
+            ),
+          }));
+          setEditTournament(null);
+          flash("Tournament updated");
+        }}
+      />
+    );
+  }
+
   const sorted = [...matches].sort((a, b) => (a.date < b.date ? 1 : -1));
-  const filtered = filter === "all" ? sorted : sorted.filter((m) => m.type === filter);
+  const filtered =
+    filter === "all"
+      ? sorted
+      : filter === "tournament"
+      ? sorted.filter((m) => m.tournament)
+      : sorted.filter((m) => m.type === filter);
 
   const summary = filtered.reduce(
     (acc, m) => {
@@ -956,6 +993,23 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
   );
   const gd = summary.f - summary.a;
   const gdLabel = gd > 0 ? `+${gd}` : `${gd}`;
+
+  const items = [];
+  const seenTournaments = new Set();
+  filtered.forEach((m) => {
+    if (m.tournament) {
+      if (seenTournaments.has(m.tournament)) return;
+      seenTournaments.add(m.tournament);
+      items.push({
+        kind: "group",
+        name: m.tournament,
+        date: m.date,
+        matches: filtered.filter((x) => x.tournament === m.tournament),
+      });
+    } else {
+      items.push({ kind: "match", match: m });
+    }
+  });
 
   return (
     <div>
@@ -1002,38 +1056,123 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
               No {RESULT_FILTERS.find((o) => o.key === filter).label.toLowerCase()} matches yet.
             </p>
           ) : (
-            <div className="flex flex-col gap-3">
-              {filtered.map((m) => {
-                const us = ourScore(m);
-                const them = m.oppGoals || 0;
-                const home = m.home ?? true;
+            <div className="flex flex-col gap-4">
+              {items.map((item) => {
+                if (item.kind === "match") {
+                  const m = item.match;
+                  const us = ourScore(m);
+                  const them = m.oppGoals || 0;
+                  const home = m.home ?? true;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => setOpenId(m.id)}
+                      className="relative flex w-full items-start gap-2 rounded-3xl bg-[#16330014] py-4 pl-4 pr-14 text-left active:bg-[#1633001f]"
+                    >
+                      <ResultBadge us={us} them={them} />
+                      <div className="min-w-0 flex-1">
+                        {m.type && (
+                          <span className="inline-block whitespace-nowrap rounded-full bg-black/[0.06] px-3 py-0.5 text-sm font-bold capitalize text-[#454745]">
+                            {m.type}
+                          </span>
+                        )}
+                        <div className="mt-1 truncate text-base font-bold leading-tight text-[#0e0f0c]">
+                          {us}–{them} vs {m.opposition || "Opposition"}
+                        </div>
+                        <div className="mt-1 truncate text-sm font-light leading-tight text-[#454745]">
+                          {fmtDate(m.date)} | {home ? "Home" : "Away"}
+                        </div>
+                      </div>
+                      <ChevronRight size={20} className="absolute right-4 top-4 shrink-0 text-[#454745]" />
+                    </button>
+                  );
+                }
+
                 return (
-                  <button
-                    key={m.id}
-                    onClick={() => setOpenId(m.id)}
-                    className="relative flex w-full items-start gap-2 rounded-3xl bg-[#16330014] py-4 pl-4 pr-14 text-left active:bg-[#1633001f]"
-                  >
-                    <ResultBadge us={us} them={them} />
-                    <div className="min-w-0 flex-1">
-                      {m.type && (
-                        <span className="inline-block whitespace-nowrap rounded-full bg-black/[0.06] px-3 py-0.5 text-sm font-bold capitalize text-[#454745]">
-                          {m.type}
-                        </span>
-                      )}
-                      <div className="mt-1 truncate text-base font-bold leading-tight text-[#0e0f0c]">
-                        {us}–{them} vs {m.opposition || "Opposition"}
+                  <div key={item.name} className="flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-bold text-[#0e0f0c]">
+                          {item.name || "Tournament"}, {fmtDate(item.date)}
+                        </div>
+                        <div className="text-sm font-normal text-[#454745]">
+                          {item.matches.length} match{item.matches.length === 1 ? "" : "es"}
+                        </div>
                       </div>
-                      <div className="mt-1 truncate text-sm font-light leading-tight text-[#454745]">
-                        {fmtDate(m.date)} | {home ? "Home" : "Away"}
-                      </div>
+                      <button
+                        onClick={() => setGroupMenu(item.name)}
+                        aria-label="Tournament options"
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]"
+                      >
+                        <MoreHorizontal size={20} />
+                      </button>
                     </div>
-                    <ChevronRight size={20} className="absolute right-4 top-4 shrink-0 text-[#454745]" />
-                  </button>
+                    <div className="overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]">
+                      {item.matches.map((m) => {
+                        const us = ourScore(m);
+                        const them = m.oppGoals || 0;
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => setOpenId(m.id)}
+                            className="relative flex w-full items-center gap-3 px-4 py-4 text-left active:bg-[#1633001f]"
+                          >
+                            <ResultBadge us={us} them={them} />
+                            <span className="min-w-0 flex-1 truncate text-base font-bold text-[#0e0f0c]">
+                              {us}–{them} vs {m.opposition || "Opposition"}
+                            </span>
+                            <ChevronRight size={20} className="shrink-0 text-[#454745]" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>
           )}
         </div>
+      )}
+
+      {groupMenu && (
+        <Modal
+          title="Edit or delete this tournament?"
+          body="Deleting it removes every match played under it from your season. This can't be undone."
+          confirmLabel="Edit"
+          secondaryLabel="Delete"
+          onCancel={() => setGroupMenu(null)}
+          onConfirm={() => {
+            setEditTournament(groupMenu);
+            setGroupMenu(null);
+          }}
+          onSecondary={() => {
+            setConfirmDeleteTournament(groupMenu);
+            setGroupMenu(null);
+          }}
+        />
+      )}
+      {confirmDeleteTournament && (
+        <Modal
+          title="Delete this tournament?"
+          body={`Removes "${confirmDeleteTournament}" and all matches played under it from your season. This can't be undone.`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirmDeleteTournament(null)}
+          onConfirm={() => {
+            setData((d) => ({
+              ...d,
+              tournament:
+                d.tournament && d.tournament.name === confirmDeleteTournament
+                  ? null
+                  : d.tournament,
+              live:
+                d.live && d.live.tournament === confirmDeleteTournament ? null : d.live,
+              matches: d.matches.filter((m) => m.tournament !== confirmDeleteTournament),
+            }));
+            flash("Tournament deleted");
+            setConfirmDeleteTournament(null);
+          }}
+        />
       )}
     </div>
   );
@@ -2206,6 +2345,28 @@ function AwardMedalsScreen({ players, initial, onDone, onCancel }) {
   );
 }
 
+function Toggle({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={
+        "relative h-8 w-14 shrink-0 rounded-full transition-colors " +
+        (checked ? "bg-blue-500" : "bg-[#0e0f0c33]")
+      }
+    >
+      <span
+        className={
+          "absolute left-1 top-1 size-6 rounded-full bg-white shadow transition-transform " +
+          (checked ? "translate-x-6" : "translate-x-0")
+        }
+      />
+    </button>
+  );
+}
+
 function MatchSetupForm({
   opposition,
   date,
@@ -2217,8 +2378,14 @@ function MatchSetupForm({
   tournament,
   format,
   showFormat = true,
+  showDate = true,
   showDetails = true,
   showPlayers = true,
+  minimalDetails = false,
+  showAllMatchesToggle = false,
+  allMatches,
+  showFormatToggle = false,
+  formatAllMatches,
   onOpposition,
   onDate,
   onHome,
@@ -2226,6 +2393,8 @@ function MatchSetupForm({
   onTournament,
   onFormat,
   onTogglePlayer,
+  onAllMatches,
+  onFormatAllMatches,
 }) {
   const locked = lockedIds || new Set();
   const rowBtn =
@@ -2246,6 +2415,7 @@ function MatchSetupForm({
         />
       </div>
 
+      {showDate && (
       <div className="flex flex-col gap-2">
         <label className="text-base font-bold text-black">Match date</label>
         <input
@@ -2255,7 +2425,10 @@ function MatchSetupForm({
           className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-lg border border-[#0e0f0c33] bg-white px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
         />
       </div>
+      )}
 
+      {!minimalDetails && (
+      <React.Fragment>
       <div className="flex flex-col gap-2">
         <label className="text-base font-bold text-black">Venue</label>
         <div className={group}>
@@ -2288,7 +2461,6 @@ function MatchSetupForm({
           {[
             { v: "league", label: "League" },
             { v: "friendly", label: "Friendly" },
-            { v: "tournament", label: "Tournament" },
             { v: null, label: "None" },
           ].map((o) => (
             <button
@@ -2309,22 +2481,18 @@ function MatchSetupForm({
           ))}
         </div>
       </div>
-
-      {type === "tournament" && (
-        <div className="flex flex-col gap-2">
-          <label className="text-base font-bold text-black">Tournament name</label>
-          <input
-            value={tournament || ""}
-            onChange={(e) => onTournament(e.target.value)}
-            placeholder="Tournament name"
-            className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none placeholder:text-[#0e0f0c66] focus:border-[#0e0f0c]"
-          />
-        </div>
+      </React.Fragment>
       )}
 
       {showFormat && (
         <div className="flex flex-col gap-2">
           <label className="text-base font-bold text-black">Match format</label>
+          {showFormatToggle && (
+            <div className="flex items-center justify-between rounded-2xl bg-[#16330014] px-3 py-3">
+              <span className="text-base font-bold text-[#0e0f0c]">All matches</span>
+              <Toggle checked={formatAllMatches} onChange={onFormatAllMatches} />
+            </div>
+          )}
           <div className={group}>
             {[
               { v: "halves", label: "Halves" },
@@ -2358,6 +2526,12 @@ function MatchSetupForm({
 
       {showPlayers && (
       <div className="flex flex-col gap-2">
+        {showAllMatchesToggle && (
+          <div className="mb-2 flex items-center justify-between rounded-2xl bg-[#16330014] px-3 py-3">
+            <span className="text-base font-bold text-[#0e0f0c]">All matches</span>
+            <Toggle checked={allMatches} onChange={onAllMatches} />
+          </div>
+        )}
         <label className="text-base font-bold text-black">Available players</label>
         {players.length === 0 ? (
           <p className="rounded-2xl bg-[#16330014] p-4 text-sm text-[#454745]">
@@ -2413,9 +2587,33 @@ function MatchSetupForm({
   );
 }
 
-function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart, onCancel }) {
+function PreMatchSetup({
+  live,
+  updLive,
+  squad,
+  isPlaying,
+  onToggle,
+  onStart,
+  onCancel,
+  inTournament,
+  sameForAll,
+  onFixSquad,
+  onFixDetails,
+}) {
   const [step, setStep] = useState("details");
+  const [allMatches, setAllMatches] = useState(true);
+  const [formatAllMatches, setFormatAllMatches] = useState(sameForAll !== false);
   const onLineup = step === "lineup";
+
+  const confirmDetails = () => {
+    if (inTournament)
+      onFixDetails({ date: live.date, format: live.format, sameForAll: formatAllMatches });
+    setStep("lineup");
+  };
+  const confirmLineup = () => {
+    if (inTournament && allMatches) onFixSquad(live.playing);
+    onStart();
+  };
 
   return (
     <div>
@@ -2428,9 +2626,11 @@ function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart, onC
           >
             {onLineup ? <ChevronLeft size={20} strokeWidth={2.5} /> : <X size={20} strokeWidth={2.5} />}
           </button>
-          <span className="text-base font-bold text-[#0e0f0c]">Match details</span>
+          <span className="text-base font-bold text-[#0e0f0c]">
+            {onLineup && inTournament ? "Team" : "Match details"}
+          </span>
           <button
-            onClick={onLineup ? onStart : () => setStep("lineup")}
+            onClick={onLineup ? confirmLineup : confirmDetails}
             aria-label={onLineup ? "Done" : "Next"}
             className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
           >
@@ -2449,6 +2649,13 @@ function PreMatchSetup({ live, updLive, squad, isPlaying, onToggle, onStart, onC
         isPlaying={isPlaying}
         showDetails={!onLineup}
         showPlayers={onLineup}
+        minimalDetails={inTournament}
+        showAllMatchesToggle={onLineup && inTournament}
+        allMatches={allMatches}
+        onAllMatches={setAllMatches}
+        showFormatToggle={!onLineup && inTournament}
+        formatAllMatches={formatAllMatches}
+        onFormatAllMatches={setFormatAllMatches}
         onOpposition={(v) => updLive((l) => ({ ...l, opposition: v }))}
         onDate={(v) => updLive((l) => ({ ...l, date: v }))}
         onHome={(v) => updLive((l) => ({ ...l, home: v }))}
@@ -2565,18 +2772,231 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
   );
 }
 
-function LiveEmpty({ onStart }) {
+function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTournament }) {
+  const results = tournament && matches ? matches : [];
+  const hasResults = results.length > 0;
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-center gap-2 px-6 text-center">
-      <SoccerballGlyph size={40} className="mb-2 text-[#0e0f0c]" />
-      <h2 className="text-2xl font-bold text-[#0e0f0c]">No live match</h2>
-      <p className="text-base font-light text-[#454745]">Set up a match to get started</p>
-      <button
-        onClick={onStart}
-        className="mt-4 h-11 w-full max-w-xs rounded-full bg-[#9fe870] text-base font-bold text-[#163300] active:bg-[#8fd95f]"
-      >
-        Set up
-      </button>
+    <div
+      className={
+        "flex flex-col items-center gap-4 px-6 text-center " +
+        (hasResults ? "pt-16" : "min-h-[70vh] justify-center")
+      }
+    >
+      <div className="flex flex-col items-center gap-2">
+        <h2 className="text-[32px] font-bold text-[#0e0f0c]">
+          {tournament ? tournament.name || "Tournament" : "No live match"}
+        </h2>
+        {!hasResults && (
+          <p className="text-base font-normal text-[#0e0f0c]">
+            {tournament ? "Set up a match to get started" : "Set up a match or tournament to get started"}
+          </p>
+        )}
+      </div>
+
+      {hasResults && (
+        <div className="flex w-full max-w-xs flex-col gap-2 text-left">
+          <label className="text-base font-bold text-black">Results</label>
+          <div className="overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]">
+            {results.map((m) => {
+              const us = sum(m.goals);
+              const them = m.oppGoals;
+              return (
+                <div key={m.id} className="flex items-center gap-3 px-3 py-3">
+                  <ResultBadge us={us} them={them} />
+                  <span className="text-base font-bold text-[#0e0f0c]">
+                    {us}-{them} vs {m.opposition || "Opposition"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="flex w-full max-w-xs flex-col gap-2">
+        <button
+          onClick={onStart}
+          className="h-11 w-full rounded-full bg-[#9fe870] text-base font-bold text-[#163300] active:bg-[#8fd95f]"
+        >
+          Set up match
+        </button>
+        <button
+          onClick={tournament ? onEndTournament : onStartTournament}
+          className="h-11 w-full rounded-full bg-[#e2f6d5] text-base font-bold text-[#163300] active:bg-[#d3efc0]"
+        >
+          {tournament ? "End tournament" : "Set up tournament"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TournamentSetup({ onCancel, onNext }) {
+  const [draft, setDraft] = useState({ name: "", date: today(), format: "halves", sameForAll: true });
+  const rowBtn =
+    "flex w-full items-center gap-3 px-3 py-3 text-left text-base font-bold text-[#0e0f0c]";
+  const group =
+    "overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]";
+
+  return (
+    <div>
+      <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-4 pb-4 pt-6">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onCancel}
+            aria-label="Close"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          <span className="text-base font-bold text-[#0e0f0c]">Tournament details</span>
+          <button
+            onClick={() => onNext(draft)}
+            aria-label="Next"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
+          >
+            <Check size={20} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-6 pb-28 pt-4">
+        <div className="flex flex-col gap-2">
+          <label className="text-base font-bold text-black">Tournament name</label>
+          <input
+            value={draft.name}
+            onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            placeholder="Tournament name"
+            className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none placeholder:text-[#0e0f0c66] focus:border-[#0e0f0c]"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-base font-bold text-black">Match date</label>
+          <input
+            type="date"
+            value={draft.date}
+            onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+            className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-lg border border-[#0e0f0c33] bg-white px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-base font-bold text-black">Match format</label>
+          <div className="flex items-center justify-between rounded-2xl bg-[#16330014] px-3 py-3">
+            <span className="text-base font-bold text-[#0e0f0c]">All matches</span>
+            <Toggle
+              checked={draft.sameForAll}
+              onChange={(v) => setDraft((d) => ({ ...d, sameForAll: v }))}
+            />
+          </div>
+          <div className={group}>
+            {[
+              { v: "halves", label: "Halves" },
+              { v: "quarters", label: "Quarters" },
+              { v: null, label: "None" },
+            ].map((o) => (
+              <button
+                key={o.label}
+                onClick={() => setDraft((d) => ({ ...d, format: o.v }))}
+                className={rowBtn + " active:bg-[#1633001f]"}
+              >
+                <span className="flex-1">{o.label}</span>
+                <span
+                  className={
+                    "flex size-5 shrink-0 items-center justify-center rounded-full border-2 " +
+                    (draft.format === o.v ? "border-[#163300]" : "border-[#0e0f0c33]")
+                  }
+                >
+                  {draft.format === o.v && (
+                    <span className="size-2.5 rounded-full bg-[#163300]" />
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditTournament({ name, date, onCancel, onSave }) {
+  const baseRef = useRef(JSON.stringify({ name, date }));
+  const [draft, setDraft] = useState({ name, date });
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
+  const dirty = () => JSON.stringify(draft) !== baseRef.current;
+  const tryClose = () => (dirty() ? setConfirmClose(true) : onCancel());
+  const trySave = () => (dirty() ? setConfirmSave(true) : onCancel());
+  const commit = () => {
+    onSave(draft);
+    setConfirmSave(false);
+  };
+
+  return (
+    <div>
+      <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-4 pb-4 pt-6">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={tryClose}
+            aria-label="Close"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          <span className="text-base font-bold text-[#0e0f0c]">Edit tournament</span>
+          <button
+            onClick={trySave}
+            aria-label="Save"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#9fe870] text-[#163300] active:bg-[#8fd95f]"
+          >
+            <Check size={20} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-6 pb-28 pt-4">
+        <div className="flex flex-col gap-2">
+          <label className="text-base font-bold text-black">Tournament name</label>
+          <input
+            value={draft.name}
+            onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            placeholder="Tournament name"
+            className="h-11 w-full rounded-lg border border-[#0e0f0c33] px-3 text-base text-[#0e0f0c] outline-none placeholder:text-[#0e0f0c66] focus:border-[#0e0f0c]"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-base font-bold text-black">Match date</label>
+          <input
+            type="date"
+            value={draft.date}
+            onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+            className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-lg border border-[#0e0f0c33] bg-white px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
+          />
+        </div>
+      </div>
+
+      {confirmClose && (
+        <Modal
+          title="Discard changes?"
+          body="Your changes to this tournament won't be saved."
+          confirmLabel="Discard"
+          danger
+          onCancel={() => setConfirmClose(false)}
+          onConfirm={onCancel}
+        />
+      )}
+      {confirmSave && (
+        <Modal
+          title="Save changes?"
+          body="This updates the tournament for every match played under it."
+          confirmLabel="Save"
+          onCancel={() => setConfirmSave(false)}
+          onConfirm={commit}
+        />
+      )}
     </div>
   );
 }
@@ -2589,7 +3009,9 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const [confirmDiscardSetup, setConfirmDiscardSetup] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [goalMenu, setGoalMenu] = useState(null);
-  const { live } = data;
+  const [tourneySetup, setTourneySetup] = useState(false);
+  const [confirmEndTournament, setConfirmEndTournament] = useState(false);
+  const { live, tournament } = data;
 
   const nameOf = (id) => (roster.find((p) => p.id === id) || {}).name || "—";
 
@@ -2597,23 +3019,60 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     setData((d) => ({
       ...d,
       live: {
-        date: today(),
+        date: d.tournament ? d.tournament.date : today(),
         opposition: "",
         home: true,
         type: null,
-        tournament: "",
-        format: "halves",
+        tournament: d.tournament ? d.tournament.name : "",
+        format: d.tournament ? d.tournament.format : "halves",
         active: false,
         ready: false,
-        playing: Object.fromEntries(
-          d.roster.filter((p) => p.active).map((p) => [p.id, true])
-        ),
+        playing: d.tournament && d.tournament.playing
+          ? { ...d.tournament.playing }
+          : Object.fromEntries(
+              d.roster.filter((p) => p.active).map((p) => [p.id, true])
+            ),
         events: [],
       },
     }));
 
+  if (tourneySetup) {
+    return (
+      <TournamentSetup
+        onCancel={() => setTourneySetup(false)}
+        onNext={(draft) => {
+          setData((d) => ({ ...d, tournament: draft }));
+          setTourneySetup(false);
+        }}
+      />
+    );
+  }
+
   if (!live) {
-    return <LiveEmpty onStart={startSetup} />;
+    return (
+      <React.Fragment>
+        <LiveEmpty
+          tournament={tournament}
+          matches={tournament ? data.matches.filter((m) => m.tournament === tournament.name) : []}
+          onStart={startSetup}
+          onStartTournament={() => setTourneySetup(true)}
+          onEndTournament={() => setConfirmEndTournament(true)}
+        />
+        {confirmEndTournament && (
+          <Modal
+            title="End tournament?"
+            body={`Matches already saved under "${tournament?.name || "this tournament"}" are kept. You can start a new tournament at any time.`}
+            confirmLabel="End tournament"
+            danger
+            onCancel={() => setConfirmEndTournament(false)}
+            onConfirm={() => {
+              setData((d) => ({ ...d, tournament: null }));
+              setConfirmEndTournament(false);
+            }}
+          />
+        )}
+      </React.Fragment>
+    );
   }
 
   const updLive = (fn) => setData((d) => ({ ...d, live: fn(d.live) }));
@@ -2705,7 +3164,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
       home: live.home,
       format: live.format !== undefined ? live.format : "halves",
       type: live.type || null,
-      tournament: live.type === "tournament" ? live.tournament || "" : "",
+      tournament: live.tournament || "",
       goals,
       assists,
       oppGoals: them,
@@ -2789,6 +3248,29 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         isPlaying={isPlaying}
         onToggle={onToggle}
         onStart={finishSetup}
+        inTournament={!!tournament}
+        sameForAll={!tournament || tournament.sameForAll !== false}
+        onFixSquad={(playing) =>
+          setData((d) =>
+            d.tournament
+              ? { ...d, tournament: { ...d.tournament, playing } }
+              : d
+          )
+        }
+        onFixDetails={({ date, format, sameForAll }) =>
+          setData((d) =>
+            d.tournament
+              ? {
+                  ...d,
+                  tournament: {
+                    ...d.tournament,
+                    sameForAll,
+                    ...(sameForAll ? { date, format } : {}),
+                  },
+                }
+              : d
+          )
+        }
         onCancel={() => setData((d) => ({ ...d, live: null }))}
       />
     );
