@@ -123,6 +123,7 @@ const normalize = (d) => ({
   matches: Array.isArray(d && d.matches) ? d.matches : [],
   live: normalizeLive(d && d.live),
   tournament: d && d.tournament && typeof d.tournament === "object" ? d.tournament : null,
+  tournamentMedals: d && d.tournamentMedals && typeof d.tournamentMedals === "object" ? d.tournamentMedals : {},
 });
 
 function Svg({ size = 20, strokeWidth = 2, className, children }) {
@@ -212,6 +213,7 @@ const seed = () => ({
   matches: [],
   live: null,
   tournament: null,
+  tournamentMedals: {},
 });
 
 function fmtDate(iso, long = false) {
@@ -919,13 +921,82 @@ const RESULT_FILTERS = [
   { key: "friendly", label: "Friendly" },
 ];
 
+function MatchRow({ m, onClick }) {
+  const us = ourScore(m);
+  const them = m.oppGoals || 0;
+  const home = m.home ?? true;
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex w-full items-start gap-2 rounded-3xl bg-[#16330014] py-4 pl-4 pr-14 text-left active:bg-[#1633001f]"
+    >
+      <ResultBadge us={us} them={them} />
+      <div className="min-w-0 flex-1">
+        {m.type && (
+          <span className="inline-block whitespace-nowrap rounded-full bg-black/[0.06] px-3 py-0.5 text-sm font-bold capitalize text-[#454745]">
+            {m.type}
+          </span>
+        )}
+        <div className="mt-1 truncate text-base font-bold leading-tight text-[#0e0f0c]">
+          {us}–{them} vs {m.opposition || "Opposition"}
+        </div>
+        <div className="mt-1 truncate text-sm font-light leading-tight text-[#454745]">
+          {fmtDate(m.date)} | {home ? "Home" : "Away"}
+        </div>
+      </div>
+      <ChevronRight size={20} className="absolute right-4 top-4 shrink-0 text-[#454745]" />
+    </button>
+  );
+}
+
+function TournamentSummary({ name, date, format, matches, medals, nameOf, onBack, onEdit, onOpenMatch, flash }) {
+  return (
+    <div>
+      <div className="glass-scrim sticky top-0 z-20 -mx-6 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-6 pb-4 pt-6">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onBack}
+            aria-label="Back to results"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#0e0f0c] active:bg-[#1633001f]"
+          >
+            <ChevronLeft size={20} strokeWidth={2.5} />
+          </button>
+          <span className="text-base font-bold text-[#0e0f0c]">Tournament details</span>
+          <button
+            onClick={onEdit}
+            aria-label="Edit tournament"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]"
+          >
+            <Pencil size={20} />
+          </button>
+        </div>
+      </div>
+
+      <TournamentCard
+        name={name}
+        date={date}
+        format={format}
+        matches={matches}
+        medals={medals}
+        nameOf={nameOf}
+        flash={flash}
+      />
+
+      <div className="mt-4 flex flex-col gap-3">
+        {matches.map((m) => (
+          <MatchRow key={m.id} m={m} onClick={() => onOpenMatch(m.id)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Matches({ data, setData, nameOf, roster, teamName, flash }) {
   const [openId, setOpenId] = useState(null);
   const [filter, setFilter] = useState("all");
-  const [groupMenu, setGroupMenu] = useState(null);
+  const [openTournament, setOpenTournament] = useState(null);
   const [editTournament, setEditTournament] = useState(null);
-  const [confirmDeleteTournament, setConfirmDeleteTournament] = useState(null);
-  const { matches, tournament } = data;
+  const { matches, tournament, tournamentMedals } = data;
   const match = matches.find((m) => m.id === openId);
 
   if (match) {
@@ -952,19 +1023,39 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
         date={currentDate}
         onCancel={() => setEditTournament(null)}
         onSave={({ name, date }) => {
-          setData((d) => ({
-            ...d,
-            tournament:
-              d.tournament && d.tournament.name === editTournament
-                ? { ...d.tournament, name, date }
-                : d.tournament,
-            matches: d.matches.map((m) =>
-              m.tournament === editTournament ? { ...m, tournament: name, date } : m
-            ),
-          }));
+          applyTournamentEdit(setData, editTournament, { name, date });
           setEditTournament(null);
+          setOpenTournament((cur) => (cur === editTournament ? name : cur));
           flash("Tournament updated");
         }}
+        onDelete={() => {
+          applyTournamentDelete(setData, editTournament);
+          setEditTournament(null);
+          setOpenTournament(null);
+          flash("Tournament deleted");
+        }}
+      />
+    );
+  }
+
+  if (openTournament) {
+    const groupMatches = matches.filter((m) => m.tournament === openTournament);
+    const currentDate =
+      tournament && tournament.name === openTournament ? tournament.date : groupMatches[0]?.date;
+    const currentFormat =
+      tournament && tournament.name === openTournament ? tournament.format : groupMatches[0]?.format;
+    return (
+      <TournamentSummary
+        name={openTournament}
+        date={currentDate}
+        format={currentFormat}
+        matches={groupMatches}
+        medals={tournamentMedals[openTournament] || { gold: null, silver: null, bronze: null }}
+        nameOf={nameOf}
+        onBack={() => setOpenTournament(null)}
+        onEdit={() => setEditTournament(openTournament)}
+        onOpenMatch={setOpenId}
+        flash={flash}
       />
     );
   }
@@ -1059,38 +1150,15 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
             <div className="flex flex-col gap-4">
               {items.map((item) => {
                 if (item.kind === "match") {
-                  const m = item.match;
-                  const us = ourScore(m);
-                  const them = m.oppGoals || 0;
-                  const home = m.home ?? true;
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => setOpenId(m.id)}
-                      className="relative flex w-full items-start gap-2 rounded-3xl bg-[#16330014] py-4 pl-4 pr-14 text-left active:bg-[#1633001f]"
-                    >
-                      <ResultBadge us={us} them={them} />
-                      <div className="min-w-0 flex-1">
-                        {m.type && (
-                          <span className="inline-block whitespace-nowrap rounded-full bg-black/[0.06] px-3 py-0.5 text-sm font-bold capitalize text-[#454745]">
-                            {m.type}
-                          </span>
-                        )}
-                        <div className="mt-1 truncate text-base font-bold leading-tight text-[#0e0f0c]">
-                          {us}–{them} vs {m.opposition || "Opposition"}
-                        </div>
-                        <div className="mt-1 truncate text-sm font-light leading-tight text-[#454745]">
-                          {fmtDate(m.date)} | {home ? "Home" : "Away"}
-                        </div>
-                      </div>
-                      <ChevronRight size={20} className="absolute right-4 top-4 shrink-0 text-[#454745]" />
-                    </button>
-                  );
+                  return <MatchRow key={item.match.id} m={item.match} onClick={() => setOpenId(item.match.id)} />;
                 }
 
                 return (
-                  <div key={item.name} className="flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2">
+                  <div key={item.name} className="overflow-hidden rounded-3xl bg-[#16330014]">
+                    <button
+                      onClick={() => setOpenTournament(item.name)}
+                      className="relative flex w-full items-start justify-between gap-2 px-4 py-4 pr-14 text-left active:bg-[#1633001f]"
+                    >
                       <div className="min-w-0">
                         <div className="truncate text-base font-bold text-[#0e0f0c]">
                           {item.name || "Tournament"}, {fmtDate(item.date)}
@@ -1099,30 +1167,19 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
                           {item.matches.length} match{item.matches.length === 1 ? "" : "es"}
                         </div>
                       </div>
-                      <button
-                        onClick={() => setGroupMenu(item.name)}
-                        aria-label="Tournament options"
-                        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#16330014] text-[#454745] active:bg-[#1633001f]"
-                      >
-                        <MoreHorizontal size={20} />
-                      </button>
-                    </div>
-                    <div className="overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]">
+                      <ChevronRight size={20} className="absolute right-4 top-4 shrink-0 text-[#454745]" />
+                    </button>
+                    <div className="divide-y divide-[#0e0f0c33] border-t border-[#0e0f0c33]">
                       {item.matches.map((m) => {
                         const us = ourScore(m);
                         const them = m.oppGoals || 0;
                         return (
-                          <button
-                            key={m.id}
-                            onClick={() => setOpenId(m.id)}
-                            className="relative flex w-full items-center gap-3 px-4 py-4 text-left active:bg-[#1633001f]"
-                          >
+                          <div key={m.id} className="flex w-full items-center gap-3 px-4 py-4">
                             <ResultBadge us={us} them={them} />
                             <span className="min-w-0 flex-1 truncate text-base font-bold text-[#0e0f0c]">
                               {us}–{them} vs {m.opposition || "Opposition"}
                             </span>
-                            <ChevronRight size={20} className="shrink-0 text-[#454745]" />
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -1134,46 +1191,6 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
         </div>
       )}
 
-      {groupMenu && (
-        <Modal
-          title="Edit or delete this tournament?"
-          body="Deleting it removes every match played under it from your season. This can't be undone."
-          confirmLabel="Edit"
-          secondaryLabel="Delete"
-          onCancel={() => setGroupMenu(null)}
-          onConfirm={() => {
-            setEditTournament(groupMenu);
-            setGroupMenu(null);
-          }}
-          onSecondary={() => {
-            setConfirmDeleteTournament(groupMenu);
-            setGroupMenu(null);
-          }}
-        />
-      )}
-      {confirmDeleteTournament && (
-        <Modal
-          title="Delete this tournament?"
-          body={`Removes "${confirmDeleteTournament}" and all matches played under it from your season. This can't be undone.`}
-          confirmLabel="Delete"
-          danger
-          onCancel={() => setConfirmDeleteTournament(null)}
-          onConfirm={() => {
-            setData((d) => ({
-              ...d,
-              tournament:
-                d.tournament && d.tournament.name === confirmDeleteTournament
-                  ? null
-                  : d.tournament,
-              live:
-                d.live && d.live.tournament === confirmDeleteTournament ? null : d.live,
-              matches: d.matches.filter((m) => m.tournament !== confirmDeleteTournament),
-            }));
-            flash("Tournament deleted");
-            setConfirmDeleteTournament(null);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -1438,7 +1455,9 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
               </p>
             )}
 
-            <Medals medals={view.medals} nameOf={nameOf} onEdit={() => setMedalEditor(true)} />
+            {!view.tournament && (
+              <Medals medals={view.medals} nameOf={nameOf} onEdit={() => setMedalEditor(true)} />
+            )}
 
             <button
               onClick={() => setConfirmDelMatch(true)}
@@ -1456,6 +1475,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
             teamEv={teamEv}
             home={view.home}
             medals={view.medals}
+            showAwards={!view.tournament}
             nameOf={nameOf}
             flash={flash}
           />
@@ -1468,6 +1488,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           type={view.type}
           tournament={view.tournament}
           format={view.format}
+          showFormat={!view.tournament}
           players={sortedLineUp}
           isPlaying={isPlaying}
           lockedIds={scoredIds}
@@ -1789,7 +1810,7 @@ function Divider() {
   return <div className="h-px w-full shrink-0 bg-white/20" />;
 }
 
-function MatchCardFace({ s, date, type, htLabel, goals, assists, awards, nameOf }) {
+function MatchCardFace({ s, date, type, htLabel, goals, assists, awards, showAwards, nameOf }) {
   const statSections = [];
   if (goals.length > 0) {
     statSections.push(
@@ -1807,19 +1828,21 @@ function MatchCardFace({ s, date, type, htLabel, goals, assists, awards, nameOf 
       </div>
     );
   }
-  statSections.push(
-    <div key="awards" className="flex flex-col gap-1">
-      <p className="text-base font-bold leading-[normal] text-white">Awards</p>
-      <div className="flex flex-wrap items-center gap-[3px]">
-        {awards.map(([emoji, id], i) => (
-          <span key={i} className="flex items-center gap-1 text-base font-light leading-[normal] text-white">
-            <span>{emoji}</span>
-            <span className="min-w-0 truncate">{nameOf(id)}</span>
-          </span>
-        ))}
+  if (showAwards) {
+    statSections.push(
+      <div key="awards" className="flex flex-col gap-1">
+        <p className="text-base font-bold leading-[normal] text-white">Awards</p>
+        <div className="flex flex-wrap items-center gap-[3px]">
+          {awards.map(([emoji, id], i) => (
+            <span key={i} className="flex items-center gap-1 text-base font-light leading-[normal] text-white">
+              <span>{emoji}</span>
+              <span className="min-w-0 truncate">{nameOf(id)}</span>
+            </span>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <>
@@ -1926,7 +1949,7 @@ function ShareSheet({ status, onCopy, onSave, onRetry, onCancel, canCopy }) {
   );
 }
 
-function MatchCard({ s, date, type, events, teamEv, home, medals, nameOf, flash }) {
+function MatchCard({ s, date, type, events, teamEv, home, medals, showAwards, nameOf, flash }) {
   const goals = summarizeEvents(teamEv, "scorerId", nameOf);
   const assists = summarizeEvents(teamEv, "assistId", nameOf);
   const awards = [
@@ -2030,6 +2053,7 @@ function MatchCard({ s, date, type, events, teamEv, home, medals, nameOf, flash 
         goals={goals}
         assists={assists}
         awards={awards}
+        showAwards={showAwards}
         nameOf={nameOf}
       />
 
@@ -2057,6 +2081,222 @@ function MatchCard({ s, date, type, events, teamEv, home, medals, nameOf, flash 
             date={date}
             type={type}
             htLabel={htLabel}
+            goals={goals}
+            assists={assists}
+            awards={awards}
+            showAwards={showAwards}
+            nameOf={nameOf}
+          />
+        </div>
+      </div>
+
+      {shareOpen && (
+        <ShareSheet
+          status={status}
+          onCopy={copyImage}
+          onSave={saveImage}
+          onRetry={renderImage}
+          onCancel={closeShare}
+          canCopy={canCopy}
+        />
+      )}
+    </div>
+  );
+}
+
+function TournamentCardFace({ name, date, format, stats, goals, assists, awards, nameOf }) {
+  const statSections = [];
+  if (goals.length > 0) {
+    statSections.push(
+      <div key="goals" className="flex flex-col gap-1">
+        <p className="text-base font-bold leading-[normal] text-white">Goals</p>
+        <p className="text-base font-light leading-[normal] text-white">{goals.join(", ")}</p>
+      </div>
+    );
+  }
+  if (assists.length > 0) {
+    statSections.push(
+      <div key="assists" className="flex flex-col gap-1">
+        <p className="text-base font-bold leading-[normal] text-white">Assists</p>
+        <p className="text-base font-light leading-[normal] text-white">{assists.join(", ")}</p>
+      </div>
+    );
+  }
+  statSections.push(
+    <div key="awards" className="flex flex-col gap-1">
+      <p className="text-base font-bold leading-[normal] text-white">Awards</p>
+      <div className="flex flex-wrap items-center gap-[3px]">
+        {awards.map(([emoji, id], i) => (
+          <span key={i} className="flex items-center gap-1 text-base font-light leading-[normal] text-white">
+            <span>{emoji}</span>
+            <span className="min-w-0 truncate">{nameOf(id)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-base font-light leading-[normal] text-white">{fmtDate(date, true)}</span>
+        {format && (
+          <span className="flex shrink-0 items-center whitespace-nowrap rounded-2xl bg-black/40 px-2 py-[5px] text-xs font-bold capitalize leading-[normal] text-white">
+            {format}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-2 border-t border-white/20 pt-4">
+        <p className="truncate text-2xl font-bold leading-[normal] text-white">{name || "Tournament"}</p>
+      </div>
+
+      <div className="mt-4 flex gap-1 rounded-lg bg-black/20 px-1 py-2">
+        {[["P:", stats.p], ["W:", stats.w], ["L:", stats.l], ["D", stats.d]].map(([label, value], i) => (
+          <React.Fragment key={label}>
+            {i > 0 && <div className="w-px shrink-0 bg-white/20" />}
+            <div className="flex flex-1 items-center justify-center gap-0.5 whitespace-nowrap text-base text-white">
+              <span className="font-light">{label}</span>
+              <span className="font-bold">{value}</span>
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-col gap-4 rounded-2xl bg-black/40 p-4">
+        {statSections.map((section, i) => (
+          <React.Fragment key={section.key}>
+            {i > 0 && <Divider />}
+            {section}
+          </React.Fragment>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function TournamentCard({ name, date, format, matches, medals, nameOf, flash }) {
+  const allTeamEvents = matches.flatMap((m) => matchToEvents(m).filter((e) => e.type === "team"));
+  const goals = summarizeEvents(allTeamEvents, "scorerId", nameOf);
+  const assists = summarizeEvents(allTeamEvents, "assistId", nameOf);
+  const awards = [
+    ["🥇", medals.gold],
+    ["🥈", medals.silver],
+    ["🥉", medals.bronze],
+  ];
+  const stats = matches.reduce(
+    (acc, m) => {
+      const us = ourScore(m);
+      const them = m.oppGoals || 0;
+      acc.p += 1;
+      if (us > them) acc.w += 1;
+      else if (us < them) acc.l += 1;
+      else acc.d += 1;
+      return acc;
+    },
+    { p: 0, w: 0, l: 0, d: 0 }
+  );
+
+  const exportRef = useRef(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [status, setStatus] = useState("idle");
+  const [imgBlob, setImgBlob] = useState(null);
+  const canCopy = typeof window !== "undefined" && !!(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write);
+
+  const renderImage = async () => {
+    setStatus("rendering");
+    setImgBlob(null);
+    try {
+      const blob = await exportCardImage(exportRef.current);
+      setImgBlob(blob);
+      setStatus("ready");
+    } catch (e) {
+      setStatus("error");
+    }
+  };
+
+  const onShare = () => {
+    setShareOpen(true);
+    renderImage();
+  };
+
+  const closeShare = () => {
+    setShareOpen(false);
+    setImgBlob(null);
+    setStatus("idle");
+  };
+
+  const fileName =
+    `${name}-${date}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") + ".png";
+
+  const copyImage = async () => {
+    if (!imgBlob) return;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": imgBlob })]);
+      flash("Copied image");
+      closeShare();
+    } catch (e) {
+      flash("Couldn't copy image");
+    }
+  };
+
+  const downloadBlob = (blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+
+  const saveImage = async () => {
+    if (!imgBlob) return;
+    const file = new File([imgBlob], fileName, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+      } catch (e) {
+        if (e && e.name !== "AbortError") downloadBlob(imgBlob);
+      }
+      closeShare();
+      return;
+    }
+    downloadBlob(imgBlob);
+    closeShare();
+  };
+
+  return (
+    <div className="rounded-3xl bg-[#163300] p-4">
+      <TournamentCardFace
+        name={name}
+        date={date}
+        format={format}
+        stats={stats}
+        goals={goals}
+        assists={assists}
+        awards={awards}
+        nameOf={nameOf}
+      />
+
+      <button
+        onClick={onShare}
+        className="mt-4 h-11 w-full rounded-full bg-[#e2f6d5] text-base font-bold text-[#163300] active:bg-[#d3efc0]"
+      >
+        Share
+      </button>
+
+      <div aria-hidden="true" className="pointer-events-none" style={{ position: "fixed", top: 0, left: "-10000px" }}>
+        <div ref={exportRef} className="rounded-3xl bg-[#163300] p-4" style={{ width: 360 }}>
+          <TournamentCardFace
+            name={name}
+            date={date}
+            format={format}
+            stats={stats}
             goals={goals}
             assists={assists}
             awards={awards}
@@ -2384,8 +2624,6 @@ function MatchSetupForm({
   minimalDetails = false,
   showAllMatchesToggle = false,
   allMatches,
-  showFormatToggle = false,
-  formatAllMatches,
   onOpposition,
   onDate,
   onHome,
@@ -2394,7 +2632,6 @@ function MatchSetupForm({
   onFormat,
   onTogglePlayer,
   onAllMatches,
-  onFormatAllMatches,
 }) {
   const locked = lockedIds || new Set();
   const rowBtn =
@@ -2487,12 +2724,6 @@ function MatchSetupForm({
       {showFormat && (
         <div className="flex flex-col gap-2">
           <label className="text-base font-bold text-black">Match format</label>
-          {showFormatToggle && (
-            <div className="flex items-center justify-between rounded-2xl bg-[#16330014] px-3 py-3">
-              <span className="text-base font-bold text-[#0e0f0c]">All matches</span>
-              <Toggle checked={formatAllMatches} onChange={onFormatAllMatches} />
-            </div>
-          )}
           <div className={group}>
             {[
               { v: "halves", label: "Halves" },
@@ -2596,20 +2827,13 @@ function PreMatchSetup({
   onStart,
   onCancel,
   inTournament,
-  sameForAll,
   onFixSquad,
-  onFixDetails,
 }) {
   const [step, setStep] = useState("details");
   const [allMatches, setAllMatches] = useState(true);
-  const [formatAllMatches, setFormatAllMatches] = useState(sameForAll !== false);
   const onLineup = step === "lineup";
 
-  const confirmDetails = () => {
-    if (inTournament)
-      onFixDetails({ date: live.date, format: live.format, sameForAll: formatAllMatches });
-    setStep("lineup");
-  };
+  const confirmDetails = () => setStep("lineup");
   const confirmLineup = () => {
     if (inTournament && allMatches) onFixSquad(live.playing);
     onStart();
@@ -2650,12 +2874,10 @@ function PreMatchSetup({
         showDetails={!onLineup}
         showPlayers={onLineup}
         minimalDetails={inTournament}
+        showFormat={!inTournament}
         showAllMatchesToggle={onLineup && inTournament}
         allMatches={allMatches}
         onAllMatches={setAllMatches}
-        showFormatToggle={!onLineup && inTournament}
-        formatAllMatches={formatAllMatches}
-        onFormatAllMatches={setFormatAllMatches}
         onOpposition={(v) => updLive((l) => ({ ...l, opposition: v }))}
         onDate={(v) => updLive((l) => ({ ...l, date: v }))}
         onHome={(v) => updLive((l) => ({ ...l, home: v }))}
@@ -2729,6 +2951,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
           type={draft.type}
           tournament={draft.tournament}
           format={draft.format}
+          showFormat={!draft.tournament}
           players={squad}
           isPlaying={isPlaying}
           lockedIds={lockedIds}
@@ -2772,7 +2995,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
   );
 }
 
-function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTournament }) {
+function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTournament, onEditTournament }) {
   const results = tournament && matches ? matches : [];
   const hasResults = results.length > 0;
   return (
@@ -2793,23 +3016,37 @@ function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTourn
         )}
       </div>
 
+      {tournament && (
+        <div className="flex w-full gap-2">
+          <button
+            onClick={onEditTournament}
+            className="h-11 flex-1 rounded-full bg-[#16330014] text-base font-bold text-[#454745] active:bg-[#1633001f]"
+          >
+            Edit
+          </button>
+          <button
+            onClick={onEndTournament}
+            className="h-11 flex-1 rounded-full bg-[#e2f6d5] text-base font-bold text-[#163300] active:bg-[#d3efc0]"
+          >
+            End
+          </button>
+        </div>
+      )}
+
       {hasResults && (
-        <div className="flex w-full flex-col gap-2 text-left">
-          <label className="text-base font-bold text-black">Results</label>
-          <div className="overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]">
-            {results.map((m) => {
-              const us = sum(m.goals);
-              const them = m.oppGoals;
-              return (
-                <div key={m.id} className="flex items-center gap-3 px-3 py-3">
-                  <ResultBadge us={us} them={them} />
-                  <span className="text-base font-bold text-[#0e0f0c]">
-                    {us}-{them} vs {m.opposition || "Opposition"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+        <div className="w-full overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33] text-left">
+          {results.map((m) => {
+            const us = sum(m.goals);
+            const them = m.oppGoals;
+            return (
+              <div key={m.id} className="flex items-center gap-3 px-3 py-3">
+                <ResultBadge us={us} them={them} />
+                <span className="text-base font-bold text-[#0e0f0c]">
+                  {us}-{them} vs {m.opposition || "Opposition"}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -2820,19 +3057,21 @@ function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTourn
         >
           Set up match
         </button>
-        <button
-          onClick={tournament ? onEndTournament : onStartTournament}
-          className="h-11 w-full rounded-full bg-[#e2f6d5] text-base font-bold text-[#163300] active:bg-[#d3efc0]"
-        >
-          {tournament ? "End tournament" : "Set up tournament"}
-        </button>
+        {!tournament && (
+          <button
+            onClick={onStartTournament}
+            className="h-11 w-full rounded-full bg-[#e2f6d5] text-base font-bold text-[#163300] active:bg-[#d3efc0]"
+          >
+            Set up tournament
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 function TournamentSetup({ onCancel, onNext }) {
-  const [draft, setDraft] = useState({ name: "", date: today(), format: "halves", sameForAll: true });
+  const [draft, setDraft] = useState({ name: "", date: today(), format: "halves" });
   const rowBtn =
     "flex w-full items-center gap-3 px-3 py-3 text-left text-base font-bold text-[#0e0f0c]";
   const group =
@@ -2883,13 +3122,6 @@ function TournamentSetup({ onCancel, onNext }) {
 
         <div className="flex flex-col gap-2">
           <label className="text-base font-bold text-black">Match format</label>
-          <div className="flex items-center justify-between rounded-2xl bg-[#16330014] px-3 py-3">
-            <span className="text-base font-bold text-[#0e0f0c]">All matches</span>
-            <Toggle
-              checked={draft.sameForAll}
-              onChange={(v) => setDraft((d) => ({ ...d, sameForAll: v }))}
-            />
-          </div>
           <div className={group}>
             {[
               { v: "halves", label: "Halves" },
@@ -2921,11 +3153,53 @@ function TournamentSetup({ onCancel, onNext }) {
   );
 }
 
-function EditTournament({ name, date, onCancel, onSave }) {
+// Renames/re-dates a tournament everywhere it's referenced: the active
+// live tournament (if it's the one being edited), every match tagged with
+// it, and its entry in the tournamentMedals map (keyed by name).
+function applyTournamentEdit(setData, oldName, { name, date }) {
+  setData((d) => {
+    const medalsForOld = d.tournamentMedals[oldName];
+    const nextMedals = { ...d.tournamentMedals };
+    if (medalsForOld !== undefined) {
+      delete nextMedals[oldName];
+      nextMedals[name] = medalsForOld;
+    }
+    return {
+      ...d,
+      tournament:
+        d.tournament && d.tournament.name === oldName
+          ? { ...d.tournament, name, date }
+          : d.tournament,
+      matches: d.matches.map((m) =>
+        m.tournament === oldName ? { ...m, tournament: name, date } : m
+      ),
+      tournamentMedals: nextMedals,
+    };
+  });
+}
+
+// Deletes a tournament and every match played under it, clearing the
+// active tournament/live match and its medals if they reference it.
+function applyTournamentDelete(setData, name) {
+  setData((d) => {
+    const nextMedals = { ...d.tournamentMedals };
+    delete nextMedals[name];
+    return {
+      ...d,
+      tournament: d.tournament && d.tournament.name === name ? null : d.tournament,
+      live: d.live && d.live.tournament === name ? null : d.live,
+      matches: d.matches.filter((m) => m.tournament !== name),
+      tournamentMedals: nextMedals,
+    };
+  });
+}
+
+function EditTournament({ name, date, onCancel, onSave, onDelete }) {
   const baseRef = useRef(JSON.stringify({ name, date }));
   const [draft, setDraft] = useState({ name, date });
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const dirty = () => JSON.stringify(draft) !== baseRef.current;
   const tryClose = () => (dirty() ? setConfirmClose(true) : onCancel());
   const trySave = () => (dirty() ? setConfirmSave(true) : onCancel());
@@ -2976,8 +3250,28 @@ function EditTournament({ name, date, onCancel, onSave }) {
             className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-lg border border-[#0e0f0c33] bg-white px-3 text-base text-[#0e0f0c] outline-none focus:border-[#0e0f0c]"
           />
         </div>
+
+        <button
+          onClick={() => setConfirmDelete(true)}
+          className="h-11 w-full rounded-full bg-[#16330014] text-base font-bold text-[#454745] active:bg-[#1633001f]"
+        >
+          Delete tournament
+        </button>
       </div>
 
+      {confirmDelete && (
+        <Modal
+          title="Delete this tournament?"
+          body={`Removes "${name}" and all matches played under it from your season. This can't be undone.`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            onDelete();
+            setConfirmDelete(false);
+          }}
+        />
+      )}
       {confirmClose && (
         <Modal
           title="Discard changes?"
@@ -3011,6 +3305,9 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const [goalMenu, setGoalMenu] = useState(null);
   const [tourneySetup, setTourneySetup] = useState(false);
   const [confirmEndTournament, setConfirmEndTournament] = useState(false);
+  const [awardTourneyMedals, setAwardTourneyMedals] = useState(false);
+  const [pendingTourneyMedals, setPendingTourneyMedals] = useState(null);
+  const [editingTournament, setEditingTournament] = useState(false);
   const { live, tournament } = data;
 
   const nameOf = (id) => (roster.find((p) => p.id === id) || {}).name || "—";
@@ -3048,6 +3345,44 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     );
   }
 
+  if (awardTourneyMedals) {
+    const eligible = [...roster]
+      .filter((p) => p.active)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return (
+      <AwardMedalsScreen
+        players={eligible}
+        initial={pendingTourneyMedals}
+        onDone={(medals) => {
+          setPendingTourneyMedals(medals);
+          setAwardTourneyMedals(false);
+          setConfirmEndTournament(true);
+        }}
+        onCancel={() => setAwardTourneyMedals(false)}
+      />
+    );
+  }
+
+  if (editingTournament && tournament) {
+    return (
+      <EditTournament
+        name={tournament.name}
+        date={tournament.date}
+        onCancel={() => setEditingTournament(false)}
+        onSave={({ name, date }) => {
+          applyTournamentEdit(setData, tournament.name, { name, date });
+          setEditingTournament(false);
+          flash("Tournament updated");
+        }}
+        onDelete={() => {
+          applyTournamentDelete(setData, tournament.name);
+          setEditingTournament(false);
+          flash("Tournament deleted");
+        }}
+      />
+    );
+  }
+
   if (!live) {
     return (
       <React.Fragment>
@@ -3056,7 +3391,8 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           matches={tournament ? data.matches.filter((m) => m.tournament === tournament.name) : []}
           onStart={startSetup}
           onStartTournament={() => setTourneySetup(true)}
-          onEndTournament={() => setConfirmEndTournament(true)}
+          onEndTournament={() => setAwardTourneyMedals(true)}
+          onEditTournament={() => setEditingTournament(true)}
         />
         {confirmEndTournament && (
           <Modal
@@ -3064,10 +3400,21 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
             body={`Matches already saved under "${tournament?.name || "this tournament"}" are kept. You can start a new tournament at any time.`}
             confirmLabel="End tournament"
             danger
-            onCancel={() => setConfirmEndTournament(false)}
-            onConfirm={() => {
-              setData((d) => ({ ...d, tournament: null }));
+            onCancel={() => {
               setConfirmEndTournament(false);
+              setPendingTourneyMedals(null);
+            }}
+            onConfirm={() => {
+              setData((d) => ({
+                ...d,
+                tournament: null,
+                tournamentMedals:
+                  tournament && pendingTourneyMedals
+                    ? { ...d.tournamentMedals, [tournament.name]: pendingTourneyMedals }
+                    : d.tournamentMedals,
+              }));
+              setConfirmEndTournament(false);
+              setPendingTourneyMedals(null);
             }}
           />
         )}
@@ -3174,7 +3521,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     };
     setData((d) => ({ ...d, matches: [record, ...d.matches], live: null }));
     setConfirmEnd(false);
-    flash("Match saved to your season");
+    flash(tournament ? "Match saved to your tournament" : "Match saved to your season");
     setTab("matches");
   };
   const discard = () => {
@@ -3187,7 +3534,11 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   if (!live.active) {
     matchBtn = { label: "Kick-off", primary: true, onClick: kickOff };
   } else if (fulltimeMarker) {
-    matchBtn = { label: "Save match", primary: true, onClick: () => setAwardMedals(true) };
+    matchBtn = {
+      label: "Save match",
+      primary: true,
+      onClick: () => (tournament ? setConfirmEnd(true) : setAwardMedals(true)),
+    };
   } else if (quarters) {
     const stage = QUARTER_STAGES.find((s) => !hasBreak(s.key));
     matchBtn = stage
@@ -3249,25 +3600,10 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
         onToggle={onToggle}
         onStart={finishSetup}
         inTournament={!!tournament}
-        sameForAll={!tournament || tournament.sameForAll !== false}
         onFixSquad={(playing) =>
           setData((d) =>
             d.tournament
               ? { ...d, tournament: { ...d.tournament, playing } }
-              : d
-          )
-        }
-        onFixDetails={({ date, format, sameForAll }) =>
-          setData((d) =>
-            d.tournament
-              ? {
-                  ...d,
-                  tournament: {
-                    ...d.tournament,
-                    sameForAll,
-                    ...(sameForAll ? { date, format } : {}),
-                  },
-                }
               : d
           )
         }
@@ -3355,8 +3691,8 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
       {confirmEnd && (
         <Modal
           title="Full-time — save this match?"
-          body={`Final score ${s.l} ${s.ls} – ${s.rs} ${s.r}. Saving adds it to your season and updates the totals. Discard throws it away.`}
-          confirmLabel="Save to season"
+          body={`Final score ${s.l} ${s.ls} – ${s.rs} ${s.r}. Saving adds it to your ${tournament ? "tournament" : "season"} and updates the totals. Discard throws it away.`}
+          confirmLabel={tournament ? "Save to tournament" : "Save to season"}
           secondaryLabel="Discard match"
           onConfirm={end}
           onSecondary={discard}
