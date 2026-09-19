@@ -1489,6 +1489,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
           tournament={view.tournament}
           format={view.format}
           showFormat={!view.tournament}
+          minimalDetails={!!view.tournament}
           players={sortedLineUp}
           isPlaying={isPlaying}
           lockedIds={scoredIds}
@@ -2952,6 +2953,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
           tournament={draft.tournament}
           format={draft.format}
           showFormat={!draft.tournament}
+          minimalDetails={!!draft.tournament}
           players={squad}
           isPlaying={isPlaying}
           lockedIds={lockedIds}
