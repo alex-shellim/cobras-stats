@@ -419,7 +419,7 @@ function ResultBadge({ us, them }) {
 // pinned to the top of the viewport while the content scrolls under it.
 function StickyHeader({ children }) {
   return (
-    <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-3 border-b border-black/[0.06] bg-white/60 px-4 pb-3 pt-6">
+    <div className="glass-scrim sticky top-0 z-20 -mx-6 -mt-6 mb-3 border-b border-black/[0.06] bg-white/60 px-6 pb-3 pt-6">
       {children}
     </div>
   );
@@ -536,7 +536,7 @@ function App() {
             {bannerText[banner]}
           </div>
         )}
-        <main className="flex-1 px-4 pb-28 pt-6">
+        <main className="flex-1 px-6 pb-28 pt-6">
           {tab === "scorers" && (<Scorers stats={stats} setData={update} roster={roster} teamName={teamName} flash={flash} />)}
           {tab === "matches" && (<Matches data={data} setData={update} nameOf={nameOf} roster={roster} teamName={teamName} flash={flash} />)}
           {tab === "live" && (<Live data={data} setData={update} roster={roster} teamName={teamName} setTab={setTab} flash={flash} />)}
@@ -734,7 +734,7 @@ function Scorers({ stats, setData, roster, teamName, flash }) {
       {manage ? (
         <div className="fixed inset-0 z-40 flex flex-col bg-white">
           <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
-            <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
+            <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
               <button
                 onClick={tryClose}
                 aria-label="Close"
@@ -825,7 +825,7 @@ function Scorers({ stats, setData, roster, teamName, flash }) {
         />
       ) : (
         <div className="mt-6 flex flex-col gap-4">
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="-mx-6 flex gap-2 overflow-x-auto px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {SORT_OPTIONS.map((o) => (
               <button
                 key={o.key}
@@ -1029,7 +1029,7 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
         />
       ) : (
         <div className="mt-6 flex flex-col gap-4">
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="-mx-6 flex gap-2 overflow-x-auto px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {RESULT_FILTERS.map((o) => (
               <button
                 key={o.key}
@@ -1359,7 +1359,7 @@ function MatchDetail({ match, setData, nameOf, roster, teamName, onBack, flash }
 
   return (
     <div>
-      <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-4 space-y-4 border-b border-black/[0.06] bg-white/65 px-4 pb-4 pt-6">
+      <div className="glass-scrim sticky top-0 z-20 -mx-6 -mt-6 mb-4 space-y-4 border-b border-black/[0.06] bg-white/65 px-6 pb-4 pt-6">
         {editable ? (
           <div className="flex items-center justify-between gap-3">
             <button
@@ -2193,7 +2193,7 @@ function SaveGoalScreen({ players, initial, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
+        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
           {step === "scorer" ? (
             <button onClick={onClose} aria-label="Close" className={iconBtn}>
               <X size={20} strokeWidth={2.5} />
@@ -2274,7 +2274,7 @@ function AwardMedalsScreen({ players, initial, onDone, onCancel }) {
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
+        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
           {stepIdx === 0 ? (
             <button onClick={onCancel} aria-label="Close" className={iconBtn}>
               <X size={20} strokeWidth={2.5} />
@@ -2617,7 +2617,7 @@ function PreMatchSetup({
 
   return (
     <div>
-      <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-4 pb-4 pt-6">
+      <div className="glass-scrim sticky top-0 z-20 -mx-6 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-6 pb-4 pt-6">
         <div className="flex items-center justify-between">
           <button
             onClick={onLineup ? () => setStep("details") : onCancel}
@@ -2702,7 +2702,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-white">
       <div className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-md items-center justify-between px-4 pb-2 pt-6">
+        <div className="mx-auto flex max-w-md items-center justify-between px-6 pb-2 pt-6">
           <button
             onClick={tryClose}
             aria-label="Close"
@@ -2778,7 +2778,7 @@ function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTourn
   return (
     <div
       className={
-        "flex flex-col items-center gap-4 px-6 text-center " +
+        "flex flex-col items-center gap-4 text-center " +
         (hasResults ? "pt-16" : "min-h-[70vh] justify-center")
       }
     >
@@ -2794,7 +2794,7 @@ function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTourn
       </div>
 
       {hasResults && (
-        <div className="flex w-full max-w-xs flex-col gap-2 text-left">
+        <div className="flex w-full flex-col gap-2 text-left">
           <label className="text-base font-bold text-black">Results</label>
           <div className="overflow-hidden rounded-2xl bg-[#16330014] divide-y divide-[#0e0f0c33]">
             {results.map((m) => {
@@ -2813,7 +2813,7 @@ function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTourn
         </div>
       )}
 
-      <div className="flex w-full max-w-xs flex-col gap-2">
+      <div className="flex w-full flex-col gap-2">
         <button
           onClick={onStart}
           className="h-11 w-full rounded-full bg-[#9fe870] text-base font-bold text-[#163300] active:bg-[#8fd95f]"
@@ -2840,7 +2840,7 @@ function TournamentSetup({ onCancel, onNext }) {
 
   return (
     <div>
-      <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-4 pb-4 pt-6">
+      <div className="glass-scrim sticky top-0 z-20 -mx-6 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-6 pb-4 pt-6">
         <div className="flex items-center justify-between">
           <button
             onClick={onCancel}
@@ -2860,7 +2860,7 @@ function TournamentSetup({ onCancel, onNext }) {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-6 pb-28 pt-4">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6 pb-28 pt-4">
         <div className="flex flex-col gap-2">
           <label className="text-base font-bold text-black">Tournament name</label>
           <input
@@ -2936,7 +2936,7 @@ function EditTournament({ name, date, onCancel, onSave }) {
 
   return (
     <div>
-      <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-4 pb-4 pt-6">
+      <div className="glass-scrim sticky top-0 z-20 -mx-6 -mt-6 mb-4 border-b border-black/[0.06] bg-white/65 px-6 pb-4 pt-6">
         <div className="flex items-center justify-between">
           <button
             onClick={tryClose}
@@ -2956,7 +2956,7 @@ function EditTournament({ name, date, onCancel, onSave }) {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-6 pb-28 pt-4">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6 pb-28 pt-4">
         <div className="flex flex-col gap-2">
           <label className="text-base font-bold text-black">Tournament name</label>
           <input
@@ -3278,7 +3278,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
 
   return (
     <div>
-      <div className="glass-scrim sticky top-0 z-20 -mx-4 -mt-6 mb-4 space-y-3 border-b border-black/[0.06] bg-white/65 px-4 pb-4 pt-6">
+      <div className="glass-scrim sticky top-0 z-20 -mx-6 -mt-6 mb-4 space-y-3 border-b border-black/[0.06] bg-white/65 px-6 pb-4 pt-6">
         <LiveScore
           live={live}
           teamName={teamName}
