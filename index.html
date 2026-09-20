@@ -996,7 +996,13 @@ function Matches({ data, setData, nameOf, roster, teamName, flash }) {
   const [filter, setFilter] = useState("all");
   const [openTournament, setOpenTournament] = useState(null);
   const [editTournament, setEditTournament] = useState(null);
-  const { matches, tournament, tournamentMedals } = data;
+  const { tournament, tournamentMedals } = data;
+  // A tournament in progress isn't "finished" yet — its matches stay off the
+  // Results page (same as a live match) until it's ended; until then they're
+  // only accessible from the Live tab.
+  const matches = tournament
+    ? data.matches.filter((m) => m.tournament !== tournament.name)
+    : data.matches;
   const match = matches.find((m) => m.id === openId);
 
   if (match) {
@@ -2997,7 +3003,7 @@ function LiveEditSheet({ live, squad, lockedIds, onSave, onCancel }) {
   );
 }
 
-function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTournament, onEditTournament }) {
+function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTournament, onEditTournament, onOpenMatch }) {
   const results = tournament && matches ? matches : [];
   const hasResults = results.length > 0;
   return (
@@ -3041,12 +3047,17 @@ function LiveEmpty({ tournament, matches, onStart, onStartTournament, onEndTourn
             const us = sum(m.goals);
             const them = m.oppGoals;
             return (
-              <div key={m.id} className="flex items-center gap-3 px-3 py-3">
+              <button
+                key={m.id}
+                onClick={() => onOpenMatch(m.id)}
+                className="relative flex w-full items-center gap-3 px-3 py-3 pr-10 text-left active:bg-[#1633001f]"
+              >
                 <ResultBadge us={us} them={them} />
                 <span className="text-base font-bold text-[#0e0f0c]">
                   {us}-{them} vs {m.opposition || "Opposition"}
                 </span>
-              </div>
+                <ChevronRight size={20} className="absolute right-3 top-1/2 -translate-y-1/2 shrink-0 text-[#454745]" />
+              </button>
             );
           })}
         </div>
@@ -3310,6 +3321,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
   const [awardTourneyMedals, setAwardTourneyMedals] = useState(false);
   const [pendingTourneyMedals, setPendingTourneyMedals] = useState(null);
   const [editingTournament, setEditingTournament] = useState(false);
+  const [openMatchId, setOpenMatchId] = useState(null);
   const { live, tournament } = data;
 
   const nameOf = (id) => (roster.find((p) => p.id === id) || {}).name || "—";
@@ -3385,6 +3397,23 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
     );
   }
 
+  if (openMatchId) {
+    const openMatch = data.matches.find((m) => m.id === openMatchId);
+    if (openMatch) {
+      return (
+        <MatchDetail
+          match={openMatch}
+          setData={setData}
+          nameOf={nameOf}
+          roster={roster}
+          teamName={teamName}
+          onBack={() => setOpenMatchId(null)}
+          flash={flash}
+        />
+      );
+    }
+  }
+
   if (!live) {
     return (
       <React.Fragment>
@@ -3395,6 +3424,7 @@ function Live({ data, setData, roster, teamName, setTab, flash }) {
           onStartTournament={() => setTourneySetup(true)}
           onEndTournament={() => setAwardTourneyMedals(true)}
           onEditTournament={() => setEditingTournament(true)}
+          onOpenMatch={setOpenMatchId}
         />
         {confirmEndTournament && (
           <Modal
